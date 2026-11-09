@@ -1,0 +1,9 @@
+# Build artifacts
+build/
+*.app
+*.o
+*.dSYM
+
+# macOS metadata
+.DS_Store
+.swiftpm/
