@@ -140,6 +140,18 @@ cd Pico
 
 ---
 
+## 💡 About this Project & Disclaimer
+
+This project was conceived, designed, and tested by Gabriele Clemente ([@Ritolino](https://github.com/Ritolino)).
+
+> **Full Disclosure:** I am not a professional software engineer or UI/UX designer — I'm a passionate tech enthusiast! This application was architected, written, and refined through human-AI pair programming using Google Antigravity powered by Gemini 3.8.
+>
+> My primary contribution has been the initial concept, iterative testing, UI/UX design, feature scoping, and real-world verification on Apple Silicon hardware (including pure AppKit architecture, Mach kernel calls, IOKit accelerator queries, AppleSMC power rails, memory leak elimination, notch display margin alignment, and complete bilingual localization).
+>
+> Because of this, suggestions, code reviews, and Pull Requests to improve the codebase, optimize memory, or enhance software architecture are warmly welcomed and appreciated!
+
+---
+
 ## 📄 License
 
 This project is licensed under the [MIT License](LICENSE).

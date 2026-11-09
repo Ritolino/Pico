@@ -140,6 +140,18 @@ cd Pico
 
 ---
 
+## 💡 Informazioni sul Progetto & Disclaimer
+
+Questo progetto è stato ideato, progettato e collaudato da Gabriele Clemente ([@Ritolino](https://github.com/Ritolino)).
+
+> **Trasparenza:** Non sono un ingegnere del software o un designer UI/UX professionista — sono un appassionato di tecnologia! Questa applicazione è stata architettata, scritta e rifinita attraverso pair programming uomo-AI utilizzando Google Antigravity potenziato da Gemini 3.8.
+>
+> Il mio contributo principale è stato l'ideazione del concetto iniziale, il testing iterativo, il design UI/UX, la definizione delle funzionalità e la validazione sul campo su hardware Apple Silicon (inclusa l'architettura pura in AppKit, le chiamate al kernel Mach, le interrogazioni IOKit ad AGXAccelerator, le letture termiche e di potenza AppleSMC, l'eliminazione dei memory leak, l'allineamento a filo barra sui display con notch e la localizzazione bilingue completa).
+>
+> Per questo motivo, suggerimenti, code review e Pull Request per migliorare il codice, ottimizzare la memoria o perfezionare l'architettura software sono calorosamente benvenuti e apprezzati!
+
+---
+
 ## 📄 Licenza
 
 Questo progetto è rilasciato sotto licenza [MIT](LICENSE).
