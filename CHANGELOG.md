@@ -1,5 +1,24 @@
 # CHANGELOG.md — Registro delle Modifiche
 
+## [1.1.0] — 2026-11-11 (Portabilità Cross-Chip M1–M5, Menu RAM Allineato, CLI JSON & Batteria Dual-Loop)
+
+### Aggiunto & Migliorato
+- **Stato Termico di Sistema (`Thermal State:`)**: aggiunta nel menu CPU e in `--dump-metrics` la lettura on-demand di `ProcessInfo.processInfo.thermalState` (`Nominal` / `Fair` / `Serious` / `Critical`) per identificare immediatamente condizioni di throttling su qualsiasi Mac M1–M5+.
+- **Discovery Dinamica Sensori Termici M1–M5 + Fallback `IOHID`**: scoperta automatica delle chiavi `AppleSMC` (`TVC0`/`TCXC`/`TC0P`/`Tp*`/`Te*`/`Ta*`/`Tc*` per CPU, `TVG0`/`Tg*` per GPU, tipi `flt ` e `sp78`) senza allocazioni heap (`array statici BSS`), con fallback automatico a `IOHIDEventSystemClient` via `dlopen`/`dlsym` e ricerca estesa potenza (`PSTR` / `PPBR` / `PDTR`).
+- **Topologia Cluster Dinamica M1–M5**: menu CPU e stampa CLI `--dump-metrics` adattivi per numero di core e nomi cluster reali (`Performance` su M1–M4, `Super` su M5, `Efficiency` su tutte le generazioni, inclusa gestione sicura di cluster dispari in `MenuDualCoreRowView`).
+- **Modalità CLI JSON (`--json` / `--dump-metrics --json`)**: esportazione immediata da terminale di metriche hardware, CPU, GPU, RAM e Top 5 processi in JSON strutturato per script e automazioni (zero impatto sull'app in barra).
+- **Bundle Version Allineato (`1.1.0`)**: aggiornato `Resources/Info.plist` (`CFBundleShortVersionString = 1.1.0`, `CFBundleVersion = 2`).
+- **Documentazione Batteria Dual-Loop, Gatekeeper & UX Primo Avvio**:
+  - Potenziati `README.md` e `README.it.md` con badge `Battery Impact: Zero Drain`, dettaglio esplicito del Dual-Loop (`3.0 s` + `500 ms` leeway a riposo con `0.26 s` CPU/minuto vs `1.0 s` solo a menu aperto), riga comparativa dedicata e FAQ per autonomia batteria.
+  - Aggiunte nei README le istruzioni per build ad-hoc su macOS Sequoia / Tahoe (**Impostazioni di Sistema → Privacy e Sicurezza → Apri comunque**, fallback Sonoma e `xattr -dr com.apple.quarantine`) e rimozione preventiva della quarantena in `Scripts/install.sh`.
+
+### Risolto & Ottimizzato (Menu RAM & LaunchServices)
+- **Allineamento Menu RAM ad Activity Monitor (`Swap Used` + `Cached Files`, `DEC-021`, `DEC-022`, `BUG-006`)**:
+  - Aggiunta la metrica in tempo reale **`Swap Used:`** via syscall C in-process `sysctlbyname("vm.swapusage")` (< 1 µs, zero sottoprocessi) con formattazione dinamica (`0.00 GB`, `%.0f MB` se < 1 GB, `%.2f GB` se >= 1 GB).
+  - Sostituita nel menu a discesa RAM la voce `Free Memory:` con **`Cached Files:`** (`(external_pages + purgeable_pages) * page_size`, già calcolata da `RAMCollector` a zero syscall extra), posizionata sopra `Swap Used:`, eliminando l'apparente discrepanza visiva rispetto ad Activity Monitor (mantenuto `Free:` nel dump diagnostico CLI `--dump-metrics`).
+- **Risoluzione Duplicato Icona / App Fantasma in Spotlight e Raycast**:
+  - Aggiornato `Scripts/install.sh` con deregistrazione proattiva di `build/Pico.app` dal database LaunchServices (`lsregister -u`), eliminazione quarantena (`xattr -dr com.apple.quarantine`) e registrazione forzata di `/Applications/Pico.app` (`lsregister -f`).
+
 ## [1.0.0] — 2026-11-09 (Fase 8: Chiusura Progetto, Icona Applicazione e Consegna Finale v1.0)
 
 ### Aggiunto & Completato

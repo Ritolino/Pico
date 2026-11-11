@@ -23,8 +23,11 @@ sleep 0.5
 echo "==> [3/4] Installing to ${TARGET_APP}..."
 rm -rf "${TARGET_APP}"
 cp -R "${REPO_DIR}/build/Pico.app" "/Applications/"
+xattr -dr com.apple.quarantine "${TARGET_APP}" 2>/dev/null || true
 codesign -s - --force "${TARGET_APP}"
+/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -u "${REPO_DIR}/build/Pico.app" 2>/dev/null || true
 rm -rf "${REPO_DIR}/build/Pico.app"
+/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "${TARGET_APP}" 2>/dev/null || true
 
 # 4. Diagnostic verification of login item
 echo "==> [4/4] Verifying SMAppService status..."

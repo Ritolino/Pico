@@ -131,13 +131,15 @@ final class MenuDualCoreRowView: NSView {
         (col1Value as NSString).draw(at: NSPoint(x: c1ValX, y: c1ValY), withAttributes: valAttrs)
 
         // Colonna 2: c2Label a metà larghezza (midX + 10), c2Value allineato a destra su bounds.width - 14
-        let c2LblSize = (col2Label as NSString).size(withAttributes: labelAttrs)
-        let c2LblY = round((bounds.height - c2LblSize.height) / 2.0)
-        (col2Label as NSString).draw(at: NSPoint(x: midX + 10.0, y: c2LblY), withAttributes: labelAttrs)
+        if !col2Label.isEmpty || !col2Value.isEmpty {
+            let c2LblSize = (col2Label as NSString).size(withAttributes: labelAttrs)
+            let c2LblY = round((bounds.height - c2LblSize.height) / 2.0)
+            (col2Label as NSString).draw(at: NSPoint(x: midX + 10.0, y: c2LblY), withAttributes: labelAttrs)
 
-        let c2ValSize = (col2Value as NSString).size(withAttributes: valAttrs)
-        let c2ValY = round((bounds.height - c2ValSize.height) / 2.0)
-        let c2ValX = bounds.width - 14.0 - c2ValSize.width
-        (col2Value as NSString).draw(at: NSPoint(x: c2ValX, y: c2ValY), withAttributes: valAttrs)
+            let c2ValSize = (col2Value as NSString).size(withAttributes: valAttrs)
+            let c2ValY = round((bounds.height - c2ValSize.height) / 2.0)
+            let c2ValX = bounds.width - 14.0 - c2ValSize.width
+            (col2Value as NSString).draw(at: NSPoint(x: c2ValX, y: c2ValY), withAttributes: valAttrs)
+        }
     }
 }

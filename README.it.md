@@ -8,10 +8,11 @@
 [![Architettura](https://img.shields.io/badge/Architettura-AppKit%20Nativo%20%2B%20Swift%20%2B%20C-purple)](https://github.com/Ritolino/Pico)
 [![Impronta RAM](https://img.shields.io/badge/Impronta%20RAM-~15%20MB-brightgreen)](docs/BENCHMARKS_AND_DESIGN.md)
 [![CPU a Riposo](https://img.shields.io/badge/CPU%20a%20Riposo-0.0%25-brightgreen)](docs/BENCHMARKS_AND_DESIGN.md)
-[![Release](https://img.shields.io/badge/Release-v1.0.0-orange)](https://github.com/Ritolino/Pico/releases/tag/v1.0.0)
+[![Impatto Batteria](https://img.shields.io/badge/Impatto%20Batteria-Zero%20Consumo-brightgreen)](docs/BENCHMARKS_AND_DESIGN.md)
+[![Release](https://img.shields.io/badge/Release-v1.1.0-orange)](https://github.com/Ritolino/Pico/releases/tag/v1.1.0)
 [![Licenza](https://img.shields.io/badge/Licenza-MIT-brightgreen.svg)](LICENSE)
 
-Un monitor di sistema **ultraleggero, a zero overhead e privacy-first** per la barra dei menu di macOS, sviluppato su misura per i processori **Apple Silicon** (M1 / M2 / M3 / M4 / M5). Progettato come alternativa minimalista e amica della batteria rispetto alle pesanti suite di monitoraggio come *Stats* e *iStat Menus*.
+Un monitor di sistema **ultraleggero, a zero overhead e privacy-first** per la barra dei menu di macOS, sviluppato su misura per i processori **Apple Silicon** (M1 / M2 / M3 / M4 / M5). Progettato per essere efficiente al **100% su batteria e RAM (~15 MB)** grazie al polling *coalesced* ogni `3.0 s` a riposo e `1.0 s` solo a menu aperto — un'alternativa minimalista alle pesanti suite come *Stats* e *iStat Menus*.
 
 [**🇬🇧 Read the README in English (README.md)**](README.md)
 
@@ -21,9 +22,15 @@ Un monitor di sistema **ultraleggero, a zero overhead e privacy-first** per la b
 
 | Piattaforma | Hardware Supportato | Formato Pacchetto | Link per il Download |
 | :--- | :--- | :--- | :--- |
-| **🍏 macOS** | Apple Silicon (M1 / M2 / M3 / M4 / M5) | Bundle Standalone (.zip) | [**Scarica Pico v1.0.0 (.zip)**](https://github.com/Ritolino/Pico/releases/download/v1.0.0/Pico-v1.0.0-macOS.zip) |
+| **🍏 macOS** | Apple Silicon (M1 / M2 / M3 / M4 / M5) | Bundle Standalone (.zip) | [**Scarica Pico v1.1.0 (.zip)**](https://github.com/Ritolino/Pico/releases/download/v1.1.0/Pico-v1.1.0-macOS.zip) |
 
 *Scarica il file `.zip`, trascina `Pico.app` nella cartella `/Applications` e avvialo. Si configura automaticamente per l'avvio al login senza alcuna procedura manuale.*
+
+> [!NOTE]
+> **Primo Avvio (Build Ad-Hoc / Gatekeeper):** Poiché Pico è gratuito e open-source senza un certificato di notarizzazione Apple Developer a pagamento, macOS può bloccare la prima apertura dello `.zip` scaricato dal browser.
+> 1. Assicurati che `Pico.app` si trovi in **`/Applications`** (necessario su macOS per l'avvio automatico al login).
+> 2. **Metodo grafico (macOS 15 Sequoia / Tahoe):** Prova ad aprire `Pico.app` una volta e clicca **Fine** → apri **Impostazioni di Sistema → Privacy e Sicurezza** → scorri fino a Sicurezza e clicca **Apri comunque**. *(Su macOS 14 Sonoma basta **Tasto destro → Apri** una volta sola.)*
+> 3. **Alternativa da Terminale (1 comando):** `xattr -dr com.apple.quarantine /Applications/Pico.app && open /Applications/Pico.app`
 
 ---
 
@@ -32,22 +39,23 @@ Un monitor di sistema **ultraleggero, a zero overhead e privacy-first** per la b
 - **🔒 100% Privato, Zero Telemetria & Zero Root**:
   - Funziona completamente offline: zero socket di rete, zero telemetria e zero tracciamento.
   - Non richiede **alcun privilegio di amministratore (`sudo`)**. Tutto viene eseguito in-process con normali permessi utente.
-- **⚡ Ultraleggero (~15 MB RAM) & Zero CPU a Riposo (0.0%)**:
-  - Mantiene un'impronta di memoria fisica di soli **~15 MB** (`phys_footprint`) — appena ~3 MB sopra la baseline minima del framework AppKit su macOS (`12 MB`).
-  - Consumo **CPU dello 0.0% a riposo**: un unico timer coalesced a `3.0 secondi` campiona direttamente solo 3 contatori kernel.
-  - **Zero Sottoprocessi**: Nessuna invocazione di `top`, `ps`, `vm_stat`, `ioreg` o `sysctl`. Azzerati i picchi di CPU, i cambi di contesto e il consumo di batteria.
+- **🔋 Efficienza Energetica Dual-Loop, ~15 MB RAM & Zero CPU a Riposo (0.0%)**:
+  - **Ciclo a Riposo Coalesced (`3.0 s` + `500 ms` di Leeway)**: In background, Pico si risveglia solo una volta ogni `3.0 secondi` tramite *timer coalescing* di macOS (`500 ms` di leeway) per leggere appena 3 contatori (`CPU %`, `GPU %`, `RAM %`). I core Apple Silicon restano così negli stati di riposo profondo (`C-states`), consumando soli **0.26 s** di CPU su 60 secondi (**0.0% CPU a riposo**).
+  - **Ciclo On-Demand al Click (`1.0 s` Solo a Menu Aperto)**: Temperature, Watt, carico per-core e top processi **non vengono mai letti in background**. L'aggiornamento reattivo ogni `1.0 s` si attiva esclusivamente mentre tieni aperto un menu e si arresta all'istante alla chiusura.
+  - **Memoria Ultraleggera (`~15 MB` RAM)**: Mantiene un'impronta fisica costante (`phys_footprint`) di appena **~15 MB** — soli ~3 MB sopra la baseline minima AppKit su macOS (`12 MB`), senza alcun buffer di grafici storici.
+  - **Zero Sottoprocessi**: Nessuna invocazione di `top`, `ps`, `vm_stat`, `ioreg` o `sysctl`. Azzerati i picchi di CPU, i cambi di contesto e i consumi di batteria.
 - **📊 Tre Elementi Indipendenti in Barra (`NSStatusItem`)**:
   - Ordinamento deterministico da sinistra a destra: **CPU**, **GPU** e **RAM**.
   - Tipografia su due righe ad alta leggibilità con percentuali numeriche ingrandite e nitide (10.5 pt) ed etichette compatte (7.0 pt bold).
   - Centratura ottica verticale perfetta e allineata alle icone di sistema (Batteria, Wi-Fi, Centro di Controllo).
   - Rendering su template dinamico a singola istanza (larghezza fissa di 32 pt): zero jitter orizzontale e riduzione del backing store grafico da 11 MB a soli 384 KB.
   - Pienamente compatibile con tema Chiaro, tema Scuro e notch display dei MacBook Pro.
-- **🔍 Menu Nativi On-Demand di Dettaglio (al Click)**:
+- **🔍 Menu Nativi On-Demand di Dettaglio (`1.0 s` Solo al Click)**:
   - Ancorati direttamente a filo contro il bordo inferiore della barra (risolto il bug dello spazio vuoto sui Mac con notch).
-  - Le letture hardware costose si attivano **esclusivamente** a menu aperto (`1.0 s`) e vengono rilasciate all'istante alla chiusura:
-    - **Menu CPU**: Utilizzo totale, scomposizione per cluster (**Super** ed **Efficiency** su M5), carico per singolo core, temperatura media, vero **Hotspot** del silicio e **Potenza Istantanea di Sistema in Watt (`W`)**.
-    - **Menu GPU**: Utilizzo del motore grafico (`AGXAcceleratorG17G`), temperatura media GPU e Hotspot GPU.
-    - **Menu RAM**: Memoria usata calcolata con la **Formula A** identica a Monitoraggio Attività (`Memoria App + Wired + Compressa`), dettaglio (`App`, `Wired`, `Compressa`, `File in cache`, `Libera`) e **Top 5 processi** per reale consumo di memoria in MB scansionati in < 2ms tramite buffer C a zero allocazioni.
+  - Zero spreco energetico in background: le letture hardware costose si attivano a `1.0 s` **esclusivamente** finché il menu resta aperto e vengono rilasciate all'istante alla chiusura:
+    - **Menu CPU**: Utilizzo totale, scomposizione dinamica per cluster (**Performance** / **Super** ed **Efficiency** su M1–M5), carico per singolo core, temperatura media, vero **Hotspot** del silicio, **Stato Termico (`Thermal State`)** e **Potenza Istantanea di Sistema in Watt (`W`)**.
+    - **Menu GPU**: Utilizzo del motore grafico (`IOAccelerator` / `AGXAccelerator`, es. `G17G` su M5), temperatura media GPU e Hotspot GPU.
+    - **Menu RAM**: Memoria usata calcolata con la **Formula A** identica a Monitoraggio Attività (`Memoria App + Wired + Compressa`), dettaglio (`App`, `Wired`, `Compressa`, `File in Cache`, `Swap Usato`) e **Top 5 processi** per reale consumo di memoria in MB scansionati in < 2ms tramite buffer C a zero allocazioni.
 - **🚀 Avvio Automatico al Login Nativo**:
   - Integrazione moderna con le API macOS Background Task Management (`SMAppService.mainApp`) per macOS 13+ (Ventura, Sonoma, Sequoia, Tahoe). Nessun demone in background o file plist superfluo.
 - **🎯 Scorciatoie Dirette per Monitoraggio Attività**:
@@ -64,6 +72,7 @@ Un monitor di sistema **ultraleggero, a zero overhead e privacy-first** per la b
 | **Impronta RAM Fisica** | **~15 MB** *(costanti)* | ~30 – 60 MB | **~100 – 250 MB** *(cresce con moduli e grafici)* | **~150 – 300 MB** *(app + demoni di supporto)* |
 | **Sovraccarico RAM Relativo** | **Baseline (0%)** | **+100% a +300%** *(da 2× a 4× più pesante)* | **+550% a +1.550%** *(da 6× a 16× più pesante)* | **+900% a +1.900%** *(da 10× a 20× più pesante)* |
 | **Consumo CPU a Riposo** | **0.0%** (timer 3.0s unico) | 0.3% – 1.0% | 0.5% – 2.0% | 1.0% – 3.0% |
+| **Polling & Impatto Batteria** | **`3.0s` coalesced a riposo + `1.0s` on-demand** *(Zero consumo)* | Polling continuo fisso | Polling continuo + grafici live | Polling continuo demoni + grafici |
 | **Sottoprocessi Generati** | **0 (Nessuno)** | Nessuno | Invocazioni `ioreg`/`sysctl` | Demoni e helper in background |
 | **Permessi di Root (`sudo`)** | **No** | No | No | Sì (helper demone privilegiato) |
 | **Framework Interfaccia** | **AppKit Nativo Puro + C** | AppKit Legacy | SwiftUI + AppKit | AppKit + Demoni separati |
@@ -90,7 +99,10 @@ Un monitor di sistema **ultraleggero, a zero overhead e privacy-first** per la b
 ## 💡 Domande Frequenti (FAQ)
 
 ### Cosa differenzia Pico da Stats o iStat Menus?
-La maggior parte dei monitor di sistema sono suite complesse con cronologie grafiche, animazioni e analizzatori di rete che occupano da 80 a 220 MB di RAM e svegliano costantemente la CPU dagli stati di risparmio energetico. Pico è pensato per chi desidera visualizzare in barra le percentuali istantanee di CPU, GPU e RAM con un impatto nullo sulle risorse (~15 MB di RAM, 0.0% CPU) e zero consumi di batteria.
+La maggior parte dei monitor di sistema sono suite complesse con cronologie grafiche, animazioni e analizzatori di rete che occupano da 100 a 300 MB di RAM e svegliano costantemente la CPU dagli stati di risparmio energetico. Pico è pensato per chi desidera visualizzare in barra le percentuali istantanee di CPU, GPU e RAM con un impatto nullo sulle risorse (~15 MB di RAM, 0.0% CPU) e massima autonomia della batteria.
+
+### Come fa Pico a preservare la batteria del MacBook? (Perché 3.0s a riposo / 1.0s a menu aperto?)
+Pico è progettato per essere efficiente al **100% anche sui consumi energetici, non solo sulla RAM**. A riposo, la barra dei menu usa un unico timer *coalesced* ogni **`3.0 secondi`** (con `500 ms` di *leeway* per allinearsi al risparmio energetico di macOS) leggendo appena 3 contatori kernel (`CPU %`, `GPU %`, `RAM %`): richiede solo **0.26 s** di CPU in un intero minuto e lascia i core Apple Silicon negli stati di riposo profondo (`C-states`). Le letture onerose (carico per-core, diodi termici, Watt di sistema e top processi) restano **completamente spente** in background e si attivano a **`1.0 s`** esclusivamente mentre tieni aperto un menu.
 
 ### Come fa Pico a calcolare la RAM in modo così accurato?
 Pico adotta esattamente la Formula A ufficiale di Monitoraggio Attività di Apple:
@@ -99,6 +111,9 @@ Molte utility di terze parti calcolano la RAM sottraendo la memoria libera dal t
 
 ### Pico monitora le temperature dei singoli core e i Watt su Apple Silicon?
 Sì. Cliccando sull'indicatore CPU o GPU vengono interrogati i diodi termici hardware (inclusi i singoli core Efficiency/Super e il vero Hotspot del silicio) e la potenza totale istantanea in Watt (`PSTR`) tramite chiamate in-process Mach, IOKit e AppleSMC, senza generare alcun sottoprocesso.
+
+### Perché macOS mostra l'avviso "Apple non può verificare…" al primo avvio?
+Pico utilizza una firma digitale locale gratuita (*ad-hoc*, `codesign -s -`) invece di un certificato di notarizzazione a pagamento Apple Developer Program, quindi macOS Gatekeeper segnala al primo avvio gli archivi `.zip` scaricati da browser. L'intero codice sorgente Swift + C è aperto e ispezionabile in questo repository: puoi compilare localmente in pochi secondi (`./Scripts/install.sh`, nessun avviso Gatekeeper) oppure autorizzare una tantum l'app scaricata da **Impostazioni di Sistema → Privacy e Sicurezza → Apri comunque** (dopo averla spostata in `/Applications`).
 
 ---
 
@@ -136,6 +151,10 @@ cd Pico
 
 # Compila e installa direttamente in /Applications
 ./Scripts/install.sh
+
+# Opzionale: ispeziona le metriche o esporta in JSON da Terminale
+/Applications/Pico.app/Contents/MacOS/Pico --dump-metrics
+/Applications/Pico.app/Contents/MacOS/Pico --json
 ```
 
 ---

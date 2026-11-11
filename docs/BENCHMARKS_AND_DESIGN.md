@@ -10,7 +10,7 @@
 Most macOS system monitors (such as *Stats*, *iStat Menus*, or *Sensei*) are multi-featured suites: they feature animated graphs, customizable themes, network packet sniffers, disk health monitors, and sensor history caches. 
 
 However, this feature depth comes with a significant hidden cost:
-- **High Memory Footprint**: They typically occupy between **80 MB and 220 MB** of physical RAM (`phys_footprint`).
+- **High Memory Footprint**: They typically occupy between **100 MB and 300 MB** of physical RAM (`phys_footprint`).
 - **Constant Idle Wakeups**: They trigger dozens of timer wakeups per second to feed live chart rendering, preventing Apple Silicon CPU cores from remaining in their deepest low-power sleep states (`C-states`).
 - **Heavy UI Frameworks**: Many rely on SwiftUI or Electron, introducing rendering overhead, large dynamic libraries, and transient heap allocations.
 
@@ -110,8 +110,8 @@ Pico is designed specifically for Apple Silicon SoCs (M1, M2, M3, M4, M5). It do
 
 ### 4.2 Sensor Diode Coverage across SoC Generations
 Hardware thermal diodes and SMC power channels vary across Apple Silicon generations:
-- Individual Super/Efficiency core thermal diodes and system power (`PSTR`) have been calibrated on physical **Apple M5** hardware.
-- On other chips (M1/M2/M3/M4), thermal or power keys that do not match the hardware layout will gracefully display **`N/A`** rather than guessing or fabricating numbers.
+- Pico dynamically discovers `AppleSMC` CPU/GPU thermal diodes (`Tp*`, `Te*`, `Ta*`, `Tc*`, `Tg*`, `TVC0`/`TVG0`) across **M1–M5** (and falls back to `IOHIDEventSystemClient` via `dlopen`/`dlsym`), alongside public `ProcessInfo.thermalState` (`Nominal`–`Critical`) and multi-key SMC wattage (`PSTR` / `PPBR` / `PDTR`).
+- If a specific Mac model or future macOS update restricts a private sensor key (note: unprivileged `libIOReport` CPU `Energy Model` counters return `0` without root on macOS 27.2), Pico gracefully displays **`N/A`** for that line rather than guessing or fabricating numbers.
 
 ### 4.3 Rootless Process Visibility Boundaries (SIP)
 Because Pico strictly respects user permissions and avoids root privileges:

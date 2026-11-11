@@ -8,6 +8,8 @@ struct RAMDetailedMetrics {
     let compressedBytes: UInt64
     let cachedFilesBytes: UInt64
     let freeBytes: UInt64
+    let swapUsedBytes: UInt64
+    let swapTotalBytes: UInt64
     let usedPercent: Int
 
     // Formule alternative per confronto e validazione empirica (Fase 2)
@@ -77,6 +79,8 @@ final class RAMCollector {
             compressedBytes: compressedBytes,
             cachedFilesBytes: cachedBytes,
             freeBytes: freeBytes,
+            swapUsedBytes: raw.swap_used_bytes,
+            swapTotalBytes: raw.swap_total_bytes,
             usedPercent: usedPct,
             formulaBUsedBytes: formulaBBytes,
             formulaBPercent: formulaBPct,

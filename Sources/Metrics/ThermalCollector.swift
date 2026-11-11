@@ -32,6 +32,22 @@ final class ThermalCollector {
         )
     }
 
+    /// Stato termico di sistema pubblico Apple (M1–M5+ senza API private, zero costi a riposo).
+    func readThermalStateLabel() -> String {
+        switch ProcessInfo.processInfo.thermalState {
+        case .nominal:
+            return "Nominal"
+        case .fair:
+            return "Fair"
+        case .serious:
+            return "Serious"
+        case .critical:
+            return "Critical"
+        @unknown default:
+            return "Unknown"
+        }
+    }
+
     func releaseResources() {
         pico_release_smc()
     }

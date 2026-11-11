@@ -31,14 +31,14 @@ final class MenuController: NSObject, NSMenuDelegate {
     private let cpuTotalView = MenuRowView(label: "Total CPU:", value: "…", isHeader: true, width: menuRowWidth, height: 22.0)
     private let cpuTempView = MenuRowView(label: "Temperature:", value: "…", width: menuRowWidth, height: 22.0)
     private let cpuHotspotView = MenuRowView(label: "CPU Hotspot:", value: "…", width: menuRowWidth, height: 22.0)
+    private let cpuThermalStateView = MenuRowView(label: "Thermal State:", value: "…", width: menuRowWidth, height: 22.0)
     private let cpuPowerView = MenuRowView(label: "System Power:", value: "…", width: menuRowWidth, height: 22.0)
-    private let superClusterView = MenuRowView(label: "Super Cluster:", value: "…", isHeader: true, width: menuRowWidth, height: 22.0)
-    private let superRow1View = MenuDualCoreRowView(width: menuRowWidth, height: 20.0)
-    private let superRow2View = MenuDualCoreRowView(width: menuRowWidth, height: 20.0)
-    private let effClusterView = MenuRowView(label: "Efficiency Cluster:", value: "…", isHeader: true, width: menuRowWidth, height: 22.0)
-    private let effRow1View = MenuDualCoreRowView(width: menuRowWidth, height: 20.0)
-    private let effRow2View = MenuDualCoreRowView(width: menuRowWidth, height: 20.0)
-    private let effRow3View = MenuDualCoreRowView(width: menuRowWidth, height: 20.0)
+    private let superClusterView: MenuRowView
+    private let superRowViews: [MenuDualCoreRowView]
+    private let effClusterView: MenuRowView
+    private let effRowViews: [MenuDualCoreRowView]
+    private let perfPrefix: String
+    private let effPrefix: String
 
     // GPU Graphic Views
     private let gpuUsageView = MenuRowView(label: "GPU Usage:", value: "…", isHeader: true, width: menuRowWidth, height: 22.0)
@@ -50,8 +50,8 @@ final class MenuController: NSObject, NSMenuDelegate {
     private let ramAppView = MenuRowView(label: "App Memory:", value: "…", width: menuRowWidth, height: 22.0)
     private let ramWiredView = MenuRowView(label: "Wired:", value: "…", width: menuRowWidth, height: 22.0)
     private let ramCompressedView = MenuRowView(label: "Compressed:", value: "…", width: menuRowWidth, height: 22.0)
-    private let ramCacheView = MenuRowView(label: "Cached Files:", value: "…", width: menuRowWidth, height: 22.0)
-    private let ramFreeView = MenuRowView(label: "Free Memory:", value: "…", width: menuRowWidth, height: 22.0)
+    private let ramCachedView = MenuRowView(label: "Cached Files:", value: "…", width: menuRowWidth, height: 22.0)
+    private let ramSwapView = MenuRowView(label: "Swap Used:", value: "…", width: menuRowWidth, height: 22.0)
     private let topProcessHeaderView = MenuRowView(label: "Top Processes (Footprint):", isHeader: true, width: menuRowWidth, height: 22.0)
     private let topProcessViews = (0..<5).map { _ in MenuRowView(label: "…", value: "…", width: menuRowWidth, height: 22.0) }
 
@@ -62,6 +62,19 @@ final class MenuController: NSObject, NSMenuDelegate {
         self.cpuCollector = cpu
         self.gpuCollector = gpu
         self.ramCollector = ram
+
+        let pName = cpu.superName.isEmpty ? "Performance" : cpu.superName
+        let eName = cpu.efficiencyName.isEmpty ? "Efficiency" : cpu.efficiencyName
+        self.superClusterView = MenuRowView(label: "\(pName) Cluster:", value: "…", isHeader: true, width: Self.menuRowWidth, height: 22.0)
+        self.effClusterView = MenuRowView(label: "\(eName) Cluster:", value: "…", isHeader: true, width: Self.menuRowWidth, height: 22.0)
+        self.perfPrefix = pName.first.map { String($0).uppercased() } ?? "P"
+        self.effPrefix = eName.first.map { String($0).uppercased() } ?? "E"
+
+        let pRowCount = max(0, (cpu.superCores + 1) / 2)
+        let eRowCount = max(0, (cpu.efficiencyCores + 1) / 2)
+        self.superRowViews = (0..<pRowCount).map { _ in MenuDualCoreRowView(width: Self.menuRowWidth, height: 20.0) }
+        self.effRowViews = (0..<eRowCount).map { _ in MenuDualCoreRowView(width: Self.menuRowWidth, height: 20.0) }
+
         super.init()
 
         setupMenuPositionAdjuster()
@@ -108,6 +121,19 @@ final class MenuController: NSObject, NSMenuDelegate {
         return String(format: "%.2f GB", gb)
     }
 
+    private static func formatSwap(_ bytes: UInt64) -> String {
+        if bytes == 0 {
+            return "0.00 GB"
+        }
+        let gb = Double(bytes) / (1024.0 * 1024.0 * 1024.0)
+        if gb >= 1.0 {
+            return String(format: "%.2f GB", gb)
+        } else {
+            let mb = Double(bytes) / (1024.0 * 1024.0)
+            return String(format: "%.0f MB", mb)
+        }
+    }
+
     private static func truncateName(_ name: String, maxLength: Int = 18) -> String {
         if name.count <= maxLength {
             return name
@@ -148,33 +174,46 @@ final class MenuController: NSObject, NSMenuDelegate {
         menu.autoenablesItems = false
         menu.delegate = self
 
-        let items: [NSMenuItem] = [
+        var items: [NSMenuItem] = [
             makeItem(with: cpuTotalView),
             makeItem(with: cpuTempView),
             makeItem(with: cpuHotspotView),
+            makeItem(with: cpuThermalStateView),
             makeItem(with: cpuPowerView),
-            NSMenuItem.separator(),
-            makeItem(with: superClusterView),
-            makeItem(with: superRow1View),
-            makeItem(with: superRow2View),
-            makeItem(with: effClusterView),
-            makeItem(with: effRow1View),
-            makeItem(with: effRow2View),
-            makeItem(with: effRow3View),
-            NSMenuItem.separator(),
-            makeActivityMonitorItem(tag: 1),
-            makeQuitItem()
+            NSMenuItem.separator()
         ]
+
+        if cpuCollector.superCores > 0 {
+            items.append(makeItem(with: superClusterView))
+            for (idx, rowView) in superRowViews.enumerated() {
+                let c1Num = idx * 2 + 1
+                let c2Num = idx * 2 + 2
+                let c2Label = c2Num <= cpuCollector.superCores ? "\(perfPrefix)\(c2Num):" : ""
+                let c2Val = c2Num <= cpuCollector.superCores ? "…%" : ""
+                rowView.setCores(c1Label: "\(perfPrefix)\(c1Num):", c1Val: "…%", c2Label: c2Label, c2Val: c2Val)
+                items.append(makeItem(with: rowView))
+            }
+        }
+
+        if cpuCollector.efficiencyCores > 0 {
+            items.append(makeItem(with: effClusterView))
+            for (idx, rowView) in effRowViews.enumerated() {
+                let c1Num = idx * 2 + 1
+                let c2Num = idx * 2 + 2
+                let c2Label = c2Num <= cpuCollector.efficiencyCores ? "\(effPrefix)\(c2Num):" : ""
+                let c2Val = c2Num <= cpuCollector.efficiencyCores ? "…%" : ""
+                rowView.setCores(c1Label: "\(effPrefix)\(c1Num):", c1Val: "…%", c2Label: c2Label, c2Val: c2Val)
+                items.append(makeItem(with: rowView))
+            }
+        }
+
+        items.append(NSMenuItem.separator())
+        items.append(makeActivityMonitorItem(tag: 1))
+        items.append(makeQuitItem())
 
         for item in items {
             menu.addItem(item)
         }
-
-        superRow1View.setCores(c1Label: "S1:", c1Val: "…%", c2Label: "S2:", c2Val: "…%")
-        superRow2View.setCores(c1Label: "S3:", c1Val: "…%", c2Label: "S4:", c2Val: "…%")
-        effRow1View.setCores(c1Label: "E1:", c1Val: "…%", c2Label: "E2:", c2Val: "…%")
-        effRow2View.setCores(c1Label: "E3:", c1Val: "…%", c2Label: "E4:", c2Val: "…%")
-        effRow3View.setCores(c1Label: "E5:", c1Val: "…%", c2Label: "E6:", c2Val: "…%")
 
         self.cpuMenu = menu
     }
@@ -210,8 +249,8 @@ final class MenuController: NSObject, NSMenuDelegate {
             makeItem(with: ramAppView),
             makeItem(with: ramWiredView),
             makeItem(with: ramCompressedView),
-            makeItem(with: ramCacheView),
-            makeItem(with: ramFreeView),
+            makeItem(with: ramCachedView),
+            makeItem(with: ramSwapView),
             NSMenuItem.separator(),
             makeItem(with: topProcessHeaderView)
         ]
@@ -329,28 +368,37 @@ final class MenuController: NSObject, NSMenuDelegate {
             effClusterView.value = "\(c.efficiencyClusterPercent)%"
 
             let cores = c.corePercents
-            // Indici 0..5 = Efficiency (E1..E6), indici 6..9 = Super (S1..S4)
-            if cores.count >= 10 {
-                superRow1View.setCores(
-                    c1Label: "S1:", c1Val: "\(cores[6])%",
-                    c2Label: "S2:", c2Val: "\(cores[7])%"
-                )
-                superRow2View.setCores(
-                    c1Label: "S3:", c1Val: "\(cores[8])%",
-                    c2Label: "S4:", c2Val: "\(cores[9])%"
-                )
-                effRow1View.setCores(
-                    c1Label: "E1:", c1Val: "\(cores[0])%",
-                    c2Label: "E2:", c2Val: "\(cores[1])%"
-                )
-                effRow2View.setCores(
-                    c1Label: "E3:", c1Val: "\(cores[2])%",
-                    c2Label: "E4:", c2Val: "\(cores[3])%"
-                )
-                effRow3View.setCores(
-                    c1Label: "E5:", c1Val: "\(cores[4])%",
-                    c2Label: "E6:", c2Val: "\(cores[5])%"
-                )
+            let effCount = cpuCollector.efficiencyCores
+            let superCount = cpuCollector.superCores
+
+            // In host_processor_info su Apple Silicon (M1..M5), gli indici 0..<effCount sono Efficiency
+            // e gli indici effCount..<(effCount+superCount) sono Performance / Super.
+            for (rowIdx, rowView) in superRowViews.enumerated() {
+                let c1Local = rowIdx * 2
+                let c2Local = rowIdx * 2 + 1
+                let c1Global = effCount + c1Local
+                let c2Global = effCount + c2Local
+
+                let c1Label = c1Local < superCount ? "\(perfPrefix)\(c1Local + 1):" : ""
+                let c1Val = (c1Local < superCount && c1Global < cores.count) ? "\(cores[c1Global])%" : "…"
+                let hasSecond = (c2Local < superCount)
+                let c2Label = hasSecond ? "\(perfPrefix)\(c2Local + 1):" : ""
+                let c2Val = (hasSecond && c2Global < cores.count) ? "\(cores[c2Global])%" : ""
+
+                rowView.setCores(c1Label: c1Label, c1Val: c1Val, c2Label: c2Label, c2Val: c2Val)
+            }
+
+            for (rowIdx, rowView) in effRowViews.enumerated() {
+                let c1Local = rowIdx * 2
+                let c2Local = rowIdx * 2 + 1
+
+                let c1Label = c1Local < effCount ? "\(effPrefix)\(c1Local + 1):" : ""
+                let c1Val = (c1Local < effCount && c1Local < cores.count) ? "\(cores[c1Local])%" : "…"
+                let hasSecond = (c2Local < effCount)
+                let c2Label = hasSecond ? "\(effPrefix)\(c2Local + 1):" : ""
+                let c2Val = (hasSecond && c2Local < cores.count) ? "\(cores[c2Local])%" : ""
+
+                rowView.setCores(c1Label: c1Label, c1Val: c1Val, c2Label: c2Label, c2Val: c2Val)
             }
         } else {
             cpuTotalView.value = "…"
@@ -363,6 +411,8 @@ final class MenuController: NSObject, NSMenuDelegate {
             cpuTempView.value = "N/A"
             cpuHotspotView.value = "N/A"
         }
+
+        cpuThermalStateView.value = thermalCollector.readThermalStateLabel()
 
         if let watts = powerCollector.readSystemWatts() {
             cpuPowerView.value = String(format: "%.1f W", watts)
@@ -395,8 +445,8 @@ final class MenuController: NSObject, NSMenuDelegate {
             ramAppView.value = Self.formatGB(r.appBytes)
             ramWiredView.value = Self.formatGB(r.wiredBytes)
             ramCompressedView.value = Self.formatGB(r.compressedBytes)
-            ramCacheView.value = Self.formatGB(r.cachedFilesBytes)
-            ramFreeView.value = Self.formatGB(r.freeBytes)
+            ramCachedView.value = Self.formatGB(r.cachedFilesBytes)
+            ramSwapView.value = Self.formatSwap(r.swapUsedBytes)
         } else {
             ramTotalView.value = "…"
         }

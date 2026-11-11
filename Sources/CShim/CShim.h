@@ -61,6 +61,8 @@ typedef struct {
     uint64_t internal_pages;
     uint64_t external_pages;
     uint64_t compressor_pages;
+    uint64_t swap_used_bytes;
+    uint64_t swap_total_bytes;
 } pico_ram_raw_t;
 
 typedef struct {
