@@ -1,5 +1,28 @@
 # CHANGELOG.md — Registro delle Modifiche
 
+## [1.2.0] — 2026-11-12 (Redesign UX/UI Menu a Discesa, Continuità GPU IOReport, Sincronia Barra 1s & Aggiornamento Automatico)
+
+### Aggiunto (`UpdateManager.swift`, `DEC-029`)
+- **Sistema di Aggiornamento Automatico Zero-Overhead da GitHub Releases**:
+  - Controllo leggero delle release su `api.github.com` 15 secondi dopo l'avvio e al massimo 1 volta ogni 24 ore al risveglio dallo standby (zero timer periodici e zero socket persistenti).
+  - Isolamento completo della rete in worker efimeri (`--internal-update-check`, `--internal-update-download`): le librerie `CFNetwork`/TLS non vengono mai caricate nel processo in barra, preservando l'impronta base e `0.0%` CPU.
+  - Voce dinamica `Update Available (vX.Y.Z)…` in fondo ai 3 menu (`CPU`, `GPU`, `RAM`) solo quando esiste una release stabile più recente, con finestra `NSAlert` (`Update & Restart`, `Later`, `Skip This Version`), verifica **SHA-256** (`CommonCrypto`), estrazione `--noqtn`, swap atomico in `/Applications/Pico.app` con pulizia temporanei/LaunchServices e ripristino automatico `SMAppService` (`LoginItemManager`).
+  - Opt-out silenzioso per setup 100% offline tramite `defaults write local.gabriele.pico PicoDisableAutoUpdate -bool true` e `--no-update-check`.
+
+### Migliorato (`DEC-025`, `DEC-028`)
+- **Riprogettazione Visiva dei 3 Menu a Discesa (`MenuViews.swift`, `MenuController.swift`, `300 pt`)**:
+  - **Hero Header (`MenuHeroView`)**: riepilogo primario dedicato in cima a CPU, GPU e RAM con percentuale protagonista (`17 pt`), `%` discreto, barra piena (`6 pt`) con colori semantici calibrati (`60/85%` CPU/GPU, `75/90%` RAM) e sottotitolo `X of Y GB used` separato su RAM.
+  - **Cluster Card CPU (`MenuClusterView`)**: card arrotondate con fascia header, badge a pillola `[ XX% ]` affiancato al titolo cluster (separazione netta fra totali cluster e singoli core), didascalia `N cores` a destra e griglia 2 colonne unite (`Etichetta + Micro-barra + %`) con attenuazione dei core a `0%`.
+  - **Scomposizione Grafica RAM, Colori Coerenti & `Thermal State` Semantico (`MenuRowView`)**: tutte le micro-barre RAM condividono la stessa regola cromatica basata sul riempimento (`systemTeal` → `systemOrange` → `systemRed`), colorazione semantica su `Thermal State` (`Nominal` verde, `Fair` arancio, `Serious`/`Critical` rosso lasciando neutri i `°C`), troncamento dinamico per pixel su `Top Processes` e contrasti adattivi Light/Dark Mode.
+  - **Nuova Gerarchia Dati CPU e RAM (`DEC-028`)**:
+    - **Menu CPU**: spostato `Thermal State` come primo dato della lista subito sotto la barra `Total CPU` e prima di `Temperature`, unificato sulla scala `Normal` / `Warning` / `Critical`.
+    - **Menu RAM**: introdotto `Memory Pressure` sulla medesima scala `Normal` (verde) / `Warning` (arancione) / `Critical` (rosso) come prima voce della lista subito sotto la barra `Memory Usage` e prima di `App Memory`, interrogando in-process via `sysctlbyname` la metrica XNU `kern.memorystatus_vm_pressure_level`. Esposta anche in `--dump-metrics` e `--json`.
+- **Allineamento Soglia `Swap Used` a `< 1 MB` (`DEC-026`, `BUG-007`)**:
+  - Centralizzati `RAMCollector.formatGB` e `RAMCollector.formatSwap` tra menu UI e `--dump-metrics`, sostituendo la soglia locale `< 512 KB` con una soglia unica a `1 MB` (`"0.00 GB"` e micro-barra spenta sotto `1 MB` senza unità `KB`, `"%.0f MB"` fino a `~1 GB`, `"%.2f GB"` oltre `1 GB`; `--json` mantiene `swap_used_bytes` esatto).
+- **Continuità GPU via `IOReport` (`GPUPH`) e Sincronia Barra ↔ Tab Aperto a `1.0 s` (`DEC-027`, `BUG-008`, `BUG-009`)**:
+  - Risolto lo `0%` transitorio di 1 secondo all'apertura del menu GPU leggendo la residenza hardware continua `IOReport` (`GPU Stats` / `GPU Performance States` → `GPUPH` via `dlopen` senza root, priming in `GPUCollector.init()`, finestra minima `150 ms`), tramite fast-path dedicato per barra (`3.0 s`) e menu GPU (`1.0 s`) che evita la serializzazione di `PerformanceStatistics` a riposo (fallback `AGX` solo al tick `0`).
+  - Rimosso il congelamento degli indicatori in barra durante la consultazione dei menu: mentre un tab (`CPU`, `GPU` o `RAM`) è aperto, tutti e 3 i valori in barra si aggiornano ogni `1.0 s` in piena coerenza `1:1` con la scheda aperta (`onMenuDidRefresh` + `allowsImplicitAnimation = false`, `barTimer` a `3.0 s` in pausa finché il menu resta aperto).
+
 ## [1.1.0] — 2026-11-11 (Portabilità Cross-Chip M1–M5, Menu RAM Allineato, CLI JSON & Batteria Dual-Loop)
 
 ### Aggiunto & Migliorato

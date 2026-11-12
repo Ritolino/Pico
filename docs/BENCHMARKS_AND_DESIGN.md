@@ -83,8 +83,8 @@ Pico strictly separates what runs in the background from what runs when the user
 2. **On-Demand Detail Loop (`1.0 s`)**: Expensive hardware queries (individual core loads, thermal diodes, SMC power in Watts, and `libproc` process table scans) activate **only** while the respective `NSMenu` is visible. When the menu closes, all detail state and temporary buffers are released immediately.
 
 ### 3.2 Zero Subprocesses & Zero Root Privileges
-- Pico **never** calls `Process` / `NSTask` to run `top`, `ps`, `vm_stat`, `sysctl`, or `ioreg`. Spawning child processes causes context switches, CPU spikes, and memory allocations.
-- Everything runs in-process via direct Mach kernel traps (`mach_host_self()`), IOKit connections (`IOServiceGetMatchingService`), and `libproc`.
+- For all telemetry and monitoring (`CPU`, `GPU`, `RAM`, thermals, wattage, top processes), Pico **never** calls `Process` / `NSTask` to run `top`, `ps`, `vm_stat`, `sysctl`, or `ioreg`. Everything runs in-process via Mach kernel traps (`mach_host_self()`), IOKit (`IOServiceGetMatchingService`), and `libproc`.
+- Update checks against GitHub Releases (once 15 s after launch and at most once per 24 hours on wake) are isolated into a sub-second ephemeral self-worker (`--internal-update-check`) so `CFNetwork`/TLS libraries are never mapped into the resident `~15 MB` menu bar process.
 - Pico requires **no `sudo` or administrator privileges**.
 
 ### 3.3 Activity Monitor RAM Formula Alignment

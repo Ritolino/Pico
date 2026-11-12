@@ -21,38 +21,47 @@ final class MenuController: NSObject, NSMenuDelegate {
         return activeMenu != nil
     }
 
-    /// Callback invocato alla chiusura di un menu per aggiornare istantaneamente la barra.
-    var onMenuClosed: (() -> Void)?
+    /// Identifica il tab correntemente aperto per mantenere coerente la barra in alto senza doppie letture.
+    enum MenuBarSyncReading {
+        case cpu(Int?)
+        case gpu(Int?)
+        case ram(Int?)
+    }
+
+    /// Callback invocato ad ogni refresh del menu aperto (apertura iniziale + tick ogni 1.0s).
+    var onMenuDidRefresh: ((MenuBarSyncReading) -> Void)?
+
+    /// Callback invocato al click sulla voce "Update Available…" presente nei menu.
+    var onUpdateItemClicked: (() -> Void)?
+
+    private var updateMenuItems: [NSMenuItem] = []
 
     // Larghezza fissa uniforme per tutte le righe dei menu
-    private static let menuRowWidth: CGFloat = 270.0
+    private static let menuRowWidth: CGFloat = 300.0
 
     // CPU Graphic Views
-    private let cpuTotalView = MenuRowView(label: "Total CPU:", value: "…", isHeader: true, width: menuRowWidth, height: 22.0)
-    private let cpuTempView = MenuRowView(label: "Temperature:", value: "…", width: menuRowWidth, height: 22.0)
-    private let cpuHotspotView = MenuRowView(label: "CPU Hotspot:", value: "…", width: menuRowWidth, height: 22.0)
-    private let cpuThermalStateView = MenuRowView(label: "Thermal State:", value: "…", width: menuRowWidth, height: 22.0)
-    private let cpuPowerView = MenuRowView(label: "System Power:", value: "…", width: menuRowWidth, height: 22.0)
-    private let superClusterView: MenuRowView
-    private let superRowViews: [MenuDualCoreRowView]
-    private let effClusterView: MenuRowView
-    private let effRowViews: [MenuDualCoreRowView]
-    private let perfPrefix: String
-    private let effPrefix: String
+    private let cpuTotalView = MenuHeroView(title: "Total CPU", width: menuRowWidth)
+    private let cpuTempView = MenuRowView(label: "Temperature", value: "…", width: menuRowWidth, height: 22.0)
+    private let cpuHotspotView = MenuRowView(label: "CPU Hotspot", value: "…", width: menuRowWidth, height: 22.0)
+    private let cpuThermalStateView = MenuRowView(label: "Thermal State", value: "…", width: menuRowWidth, height: 22.0)
+    private let cpuPowerView = MenuRowView(label: "System Power", value: "…", width: menuRowWidth, height: 22.0)
+    private let superClusterCard: MenuClusterView?
+    private let effClusterCard: MenuClusterView?
 
     // GPU Graphic Views
-    private let gpuUsageView = MenuRowView(label: "GPU Usage:", value: "…", isHeader: true, width: menuRowWidth, height: 22.0)
-    private let gpuTempView = MenuRowView(label: "Temperature:", value: "…", width: menuRowWidth, height: 22.0)
-    private let gpuHotspotView = MenuRowView(label: "GPU Hotspot:", value: "…", width: menuRowWidth, height: 22.0)
+    private let gpuUsageView = MenuHeroView(title: "GPU Usage", width: menuRowWidth)
+    private let gpuTempView = MenuRowView(label: "Temperature", value: "…", width: menuRowWidth, height: 22.0)
+    private let gpuHotspotView = MenuRowView(label: "GPU Hotspot", value: "…", width: menuRowWidth, height: 22.0)
 
-    // RAM Graphic Views (flush-left alignment on x = 14pt)
-    private let ramTotalView = MenuRowView(label: "Used RAM:", value: "…", isHeader: true, width: menuRowWidth, height: 22.0)
-    private let ramAppView = MenuRowView(label: "App Memory:", value: "…", width: menuRowWidth, height: 22.0)
-    private let ramWiredView = MenuRowView(label: "Wired:", value: "…", width: menuRowWidth, height: 22.0)
-    private let ramCompressedView = MenuRowView(label: "Compressed:", value: "…", width: menuRowWidth, height: 22.0)
-    private let ramCachedView = MenuRowView(label: "Cached Files:", value: "…", width: menuRowWidth, height: 22.0)
-    private let ramSwapView = MenuRowView(label: "Swap Used:", value: "…", width: menuRowWidth, height: 22.0)
-    private let topProcessHeaderView = MenuRowView(label: "Top Processes (Footprint):", isHeader: true, width: menuRowWidth, height: 22.0)
+    // RAM Graphic Views
+    private let ramTotalView = MenuHeroView(title: "Memory Usage", hasSubtitle: true, warningThreshold: 75, criticalThreshold: 90, width: menuRowWidth)
+    private let ramPressureView = MenuRowView(label: "Memory Pressure", value: "…", width: menuRowWidth, height: 22.0)
+    private let ramAppView = MenuRowView(label: "App Memory", value: "…", width: menuRowWidth, height: 22.0)
+    private let ramWiredView = MenuRowView(label: "Wired", value: "…", width: menuRowWidth, height: 22.0)
+    private let ramCompressedView = MenuRowView(label: "Compressed", value: "…", width: menuRowWidth, height: 22.0)
+    private let ramCachedView = MenuRowView(label: "Cached Files", value: "…", width: menuRowWidth, height: 22.0)
+    private let ramSwapView = MenuRowView(label: "Swap Used", value: "…", width: menuRowWidth, height: 22.0)
+    private let topProcessHeaderView = MenuRowView(label: "Top Processes", isHeader: true, width: menuRowWidth, height: 20.0)
     private let topProcessViews = (0..<5).map { _ in MenuRowView(label: "…", value: "…", width: menuRowWidth, height: 22.0) }
 
     /// Traccia l'ID della finestra del menu correntemente aperto per calibrare una sola volta la posizione verticale.
@@ -65,15 +74,15 @@ final class MenuController: NSObject, NSMenuDelegate {
 
         let pName = cpu.superName.isEmpty ? "Performance" : cpu.superName
         let eName = cpu.efficiencyName.isEmpty ? "Efficiency" : cpu.efficiencyName
-        self.superClusterView = MenuRowView(label: "\(pName) Cluster:", value: "…", isHeader: true, width: Self.menuRowWidth, height: 22.0)
-        self.effClusterView = MenuRowView(label: "\(eName) Cluster:", value: "…", isHeader: true, width: Self.menuRowWidth, height: 22.0)
-        self.perfPrefix = pName.first.map { String($0).uppercased() } ?? "P"
-        self.effPrefix = eName.first.map { String($0).uppercased() } ?? "E"
+        let perfPrefix = pName.first.map { String($0).uppercased() } ?? "P"
+        let effPrefix = eName.first.map { String($0).uppercased() } ?? "E"
 
-        let pRowCount = max(0, (cpu.superCores + 1) / 2)
-        let eRowCount = max(0, (cpu.efficiencyCores + 1) / 2)
-        self.superRowViews = (0..<pRowCount).map { _ in MenuDualCoreRowView(width: Self.menuRowWidth, height: 20.0) }
-        self.effRowViews = (0..<eRowCount).map { _ in MenuDualCoreRowView(width: Self.menuRowWidth, height: 20.0) }
+        self.superClusterCard = cpu.superCores > 0
+            ? MenuClusterView(clusterTitle: "\(pName) Cluster", corePrefix: perfPrefix, coreCount: cpu.superCores, width: Self.menuRowWidth)
+            : nil
+        self.effClusterCard = cpu.efficiencyCores > 0
+            ? MenuClusterView(clusterTitle: "\(eName) Cluster", corePrefix: effPrefix, coreCount: cpu.efficiencyCores, width: Self.menuRowWidth)
+            : nil
 
         super.init()
 
@@ -116,24 +125,6 @@ final class MenuController: NSObject, NSMenuDelegate {
         }
     }
 
-    private static func formatGB(_ bytes: UInt64) -> String {
-        let gb = Double(bytes) / (1024.0 * 1024.0 * 1024.0)
-        return String(format: "%.2f GB", gb)
-    }
-
-    private static func formatSwap(_ bytes: UInt64) -> String {
-        if bytes == 0 {
-            return "0.00 GB"
-        }
-        let gb = Double(bytes) / (1024.0 * 1024.0 * 1024.0)
-        if gb >= 1.0 {
-            return String(format: "%.2f GB", gb)
-        } else {
-            let mb = Double(bytes) / (1024.0 * 1024.0)
-            return String(format: "%.0f MB", mb)
-        }
-    }
-
     private static func truncateName(_ name: String, maxLength: Int = 18) -> String {
         if name.count <= maxLength {
             return name
@@ -146,6 +137,38 @@ final class MenuController: NSObject, NSMenuDelegate {
         item.view = view
         item.isEnabled = false
         return item
+    }
+
+    private func makeUpdateMenuItem() -> NSMenuItem {
+        let item = NSMenuItem(
+            title: "Update Available…",
+            action: #selector(handleUpdateClicked(_:)),
+            keyEquivalent: ""
+        )
+        item.target = self
+        item.isHidden = true
+        if let symbol = NSImage(systemSymbolName: "arrow.down.circle", accessibilityDescription: "Update Available") {
+            symbol.isTemplate = true
+            item.image = symbol
+        }
+        updateMenuItems.append(item)
+        return item
+    }
+
+    @objc private func handleUpdateClicked(_ sender: NSMenuItem) {
+        onUpdateItemClicked?()
+    }
+
+    func setAvailableUpdate(_ release: UpdateReleaseInfo?, isDownloading: Bool = false) {
+        for item in updateMenuItems {
+            if let release {
+                item.isHidden = false
+                item.title = isDownloading ? "Downloading Update…" : "Update Available (v\(release.version))…"
+                item.isEnabled = !isDownloading
+            } else {
+                item.isHidden = true
+            }
+        }
     }
 
     private func makeActivityMonitorItem(tag: Int) -> NSMenuItem {
@@ -176,38 +199,28 @@ final class MenuController: NSObject, NSMenuDelegate {
 
         var items: [NSMenuItem] = [
             makeItem(with: cpuTotalView),
+            NSMenuItem.separator(),
+            makeItem(with: cpuThermalStateView),
             makeItem(with: cpuTempView),
             makeItem(with: cpuHotspotView),
-            makeItem(with: cpuThermalStateView),
             makeItem(with: cpuPowerView),
             NSMenuItem.separator()
         ]
 
-        if cpuCollector.superCores > 0 {
-            items.append(makeItem(with: superClusterView))
-            for (idx, rowView) in superRowViews.enumerated() {
-                let c1Num = idx * 2 + 1
-                let c2Num = idx * 2 + 2
-                let c2Label = c2Num <= cpuCollector.superCores ? "\(perfPrefix)\(c2Num):" : ""
-                let c2Val = c2Num <= cpuCollector.superCores ? "…%" : ""
-                rowView.setCores(c1Label: "\(perfPrefix)\(c1Num):", c1Val: "…%", c2Label: c2Label, c2Val: c2Val)
-                items.append(makeItem(with: rowView))
-            }
+        if let superCard = superClusterCard {
+            items.append(makeItem(with: superCard))
         }
 
-        if cpuCollector.efficiencyCores > 0 {
-            items.append(makeItem(with: effClusterView))
-            for (idx, rowView) in effRowViews.enumerated() {
-                let c1Num = idx * 2 + 1
-                let c2Num = idx * 2 + 2
-                let c2Label = c2Num <= cpuCollector.efficiencyCores ? "\(effPrefix)\(c2Num):" : ""
-                let c2Val = c2Num <= cpuCollector.efficiencyCores ? "…%" : ""
-                rowView.setCores(c1Label: "\(effPrefix)\(c1Num):", c1Val: "…%", c2Label: c2Label, c2Val: c2Val)
-                items.append(makeItem(with: rowView))
-            }
+        if superClusterCard != nil && effClusterCard != nil {
+            items.append(makeItem(with: MenuSpacerView(width: Self.menuRowWidth, height: 6.0)))
+        }
+
+        if let effCard = effClusterCard {
+            items.append(makeItem(with: effCard))
         }
 
         items.append(NSMenuItem.separator())
+        items.append(makeUpdateMenuItem())
         items.append(makeActivityMonitorItem(tag: 1))
         items.append(makeQuitItem())
 
@@ -225,9 +238,11 @@ final class MenuController: NSObject, NSMenuDelegate {
 
         let items: [NSMenuItem] = [
             makeItem(with: gpuUsageView),
+            NSMenuItem.separator(),
             makeItem(with: gpuTempView),
             makeItem(with: gpuHotspotView),
             NSMenuItem.separator(),
+            makeUpdateMenuItem(),
             makeActivityMonitorItem(tag: 2),
             makeQuitItem()
         ]
@@ -246,6 +261,8 @@ final class MenuController: NSObject, NSMenuDelegate {
 
         var items: [NSMenuItem] = [
             makeItem(with: ramTotalView),
+            NSMenuItem.separator(),
+            makeItem(with: ramPressureView),
             makeItem(with: ramAppView),
             makeItem(with: ramWiredView),
             makeItem(with: ramCompressedView),
@@ -260,6 +277,7 @@ final class MenuController: NSObject, NSMenuDelegate {
         }
 
         items.append(NSMenuItem.separator())
+        items.append(makeUpdateMenuItem())
         items.append(makeActivityMonitorItem(tag: 3))
         items.append(makeQuitItem())
 
@@ -361,11 +379,12 @@ final class MenuController: NSObject, NSMenuDelegate {
 
     // MARK: - Aggiornamento Dettagli On-Demand
 
-    func updateCPUMenu() {
+    @discardableResult
+    func updateCPUMenu() -> Int? {
+        var cpuBarPercent: Int?
         if let c = cpuCollector.readDetailed() {
-            cpuTotalView.value = "\(c.totalPercent)%"
-            superClusterView.value = "\(c.superClusterPercent)%"
-            effClusterView.value = "\(c.efficiencyClusterPercent)%"
+            cpuBarPercent = c.totalPercent
+            cpuTotalView.update(percent: c.totalPercent)
 
             let cores = c.corePercents
             let effCount = cpuCollector.efficiencyCores
@@ -373,35 +392,18 @@ final class MenuController: NSObject, NSMenuDelegate {
 
             // In host_processor_info su Apple Silicon (M1..M5), gli indici 0..<effCount sono Efficiency
             // e gli indici effCount..<(effCount+superCount) sono Performance / Super.
-            for (rowIdx, rowView) in superRowViews.enumerated() {
-                let c1Local = rowIdx * 2
-                let c2Local = rowIdx * 2 + 1
-                let c1Global = effCount + c1Local
-                let c2Global = effCount + c2Local
-
-                let c1Label = c1Local < superCount ? "\(perfPrefix)\(c1Local + 1):" : ""
-                let c1Val = (c1Local < superCount && c1Global < cores.count) ? "\(cores[c1Global])%" : "…"
-                let hasSecond = (c2Local < superCount)
-                let c2Label = hasSecond ? "\(perfPrefix)\(c2Local + 1):" : ""
-                let c2Val = (hasSecond && c2Global < cores.count) ? "\(cores[c2Global])%" : ""
-
-                rowView.setCores(c1Label: c1Label, c1Val: c1Val, c2Label: c2Label, c2Val: c2Val)
+            let superSlice: [Int?] = (0..<superCount).map { localIdx in
+                let globalIdx = effCount + localIdx
+                return globalIdx < cores.count ? cores[globalIdx] : nil
             }
+            superClusterCard?.update(clusterPercent: c.superClusterPercent, corePercents: superSlice)
 
-            for (rowIdx, rowView) in effRowViews.enumerated() {
-                let c1Local = rowIdx * 2
-                let c2Local = rowIdx * 2 + 1
-
-                let c1Label = c1Local < effCount ? "\(effPrefix)\(c1Local + 1):" : ""
-                let c1Val = (c1Local < effCount && c1Local < cores.count) ? "\(cores[c1Local])%" : "…"
-                let hasSecond = (c2Local < effCount)
-                let c2Label = hasSecond ? "\(effPrefix)\(c2Local + 1):" : ""
-                let c2Val = (hasSecond && c2Local < cores.count) ? "\(cores[c2Local])%" : ""
-
-                rowView.setCores(c1Label: c1Label, c1Val: c1Val, c2Label: c2Label, c2Val: c2Val)
+            let effSlice: [Int?] = (0..<effCount).map { localIdx in
+                return localIdx < cores.count ? cores[localIdx] : nil
             }
+            effClusterCard?.update(clusterPercent: c.efficiencyClusterPercent, corePercents: effSlice)
         } else {
-            cpuTotalView.value = "…"
+            cpuTotalView.update(percent: nil, valueText: "…")
         }
 
         if let t = thermalCollector.readCPUThermal() {
@@ -412,20 +414,25 @@ final class MenuController: NSObject, NSMenuDelegate {
             cpuHotspotView.value = "N/A"
         }
 
-        cpuThermalStateView.value = thermalCollector.readThermalStateLabel()
+        let thermalState = thermalCollector.readThermalStateLabel()
+        cpuThermalStateView.value = thermalState
+        cpuThermalStateView.valueColorOverride = MenuVisualStyle.thermalStateColor(for: thermalState)
 
         if let watts = powerCollector.readSystemWatts() {
             cpuPowerView.value = String(format: "%.1f W", watts)
         } else {
             cpuPowerView.value = "N/A"
         }
+        return cpuBarPercent
     }
 
-    func updateGPUMenu() {
-        if let g = gpuCollector.readDetailed() {
-            gpuUsageView.value = "\(g.deviceUtilizationPercent)%"
+    @discardableResult
+    func updateGPUMenu() -> Int? {
+        let gpuBarPercent = gpuCollector.readTotalPercent()
+        if let pct = gpuBarPercent {
+            gpuUsageView.update(percent: pct)
         } else {
-            gpuUsageView.value = "N/A"
+            gpuUsageView.update(percent: nil, valueText: "N/A")
         }
 
         if let t = thermalCollector.readGPUThermal() {
@@ -435,43 +442,92 @@ final class MenuController: NSObject, NSMenuDelegate {
             gpuTempView.value = "N/A"
             gpuHotspotView.value = "N/A"
         }
+        return gpuBarPercent
     }
 
-    func updateRAMMenu() {
+    @discardableResult
+    func updateRAMMenu() -> Int? {
+        var ramBarPercent: Int?
         if let r = ramCollector.readDetailed() {
-            let totalGB = Double(r.totalBytes) / (1024.0 * 1024.0 * 1024.0)
+            ramBarPercent = r.usedPercent
+            let totalDouble = max(1.0, Double(r.totalBytes))
+            let totalGB = totalDouble / (1024.0 * 1024.0 * 1024.0)
             let usedGB = Double(r.usedBytes) / (1024.0 * 1024.0 * 1024.0)
-            ramTotalView.value = String(format: "%.1f / %.1f GB (%d%%)", usedGB, totalGB, r.usedPercent)
-            ramAppView.value = Self.formatGB(r.appBytes)
-            ramWiredView.value = Self.formatGB(r.wiredBytes)
-            ramCompressedView.value = Self.formatGB(r.compressedBytes)
-            ramCachedView.value = Self.formatGB(r.cachedFilesBytes)
-            ramSwapView.value = Self.formatSwap(r.swapUsedBytes)
+            ramTotalView.update(
+                percent: r.usedPercent,
+                subtitle: String(format: "%.1f of %.1f GB used", usedGB, totalGB)
+            )
+
+            ramPressureView.value = r.pressureLabel
+            ramPressureView.valueColorOverride = MenuVisualStyle.memoryPressureColor(for: r.pressureLabel)
+
+            let appFraction = Double(r.appBytes) / totalDouble
+            let wiredFraction = Double(r.wiredBytes) / totalDouble
+            let compressedFraction = Double(r.compressedBytes) / totalDouble
+            let cachedFraction = Double(r.cachedFilesBytes) / totalDouble
+
+            ramAppView.setBarValue(
+                RAMCollector.formatGB(r.appBytes),
+                fraction: appFraction,
+                color: MenuVisualStyle.semanticColor(forFraction: appFraction, warningAt: 75, criticalAt: 90)
+            )
+            ramWiredView.setBarValue(
+                RAMCollector.formatGB(r.wiredBytes),
+                fraction: wiredFraction,
+                color: MenuVisualStyle.semanticColor(forFraction: wiredFraction, warningAt: 75, criticalAt: 90)
+            )
+            ramCompressedView.setBarValue(
+                RAMCollector.formatGB(r.compressedBytes),
+                fraction: compressedFraction,
+                color: MenuVisualStyle.semanticColor(forFraction: compressedFraction, warningAt: 75, criticalAt: 90)
+            )
+            ramCachedView.setBarValue(
+                RAMCollector.formatGB(r.cachedFilesBytes),
+                fraction: cachedFraction,
+                color: .systemTeal
+            )
+
+            let activeSwapBytes: UInt64 = r.swapUsedBytes >= 1024 * 1024 ? r.swapUsedBytes : 0
+            let swapFraction: Double
+            if activeSwapBytes == 0 {
+                swapFraction = 0.0
+            } else if r.swapTotalBytes > 0 {
+                swapFraction = Double(activeSwapBytes) / Double(r.swapTotalBytes)
+            } else {
+                swapFraction = Double(activeSwapBytes) / totalDouble
+            }
+            ramSwapView.setBarValue(
+                RAMCollector.formatSwap(activeSwapBytes),
+                fraction: swapFraction,
+                color: MenuVisualStyle.semanticColor(forFraction: swapFraction, warningAt: 60, criticalAt: 85),
+                dimWhenZero: true
+            )
         } else {
-            ramTotalView.value = "…"
+            ramTotalView.update(percent: nil, valueText: "…", subtitle: "")
         }
 
         let top = processCollector.readTopProcesses()
         for i in 0..<5 {
             if i < top.count {
                 let p = top[i]
-                topProcessViews[i].label = Self.truncateName(p.name, maxLength: 18)
+                topProcessViews[i].label = Self.truncateName(p.name, maxLength: 28)
                 topProcessViews[i].value = String(format: "%.0f MB", p.footprintMB)
             } else {
                 topProcessViews[i].label = "-"
                 topProcessViews[i].value = "-"
             }
         }
+        return ramBarPercent
     }
 
     private func updateActiveMenu() {
         guard let menu = activeMenu else { return }
         if menu === cpuMenu {
-            updateCPUMenu()
+            onMenuDidRefresh?(.cpu(updateCPUMenu()))
         } else if menu === gpuMenu {
-            updateGPUMenu()
+            onMenuDidRefresh?(.gpu(updateGPUMenu()))
         } else if menu === ramMenu {
-            updateRAMMenu()
+            onMenuDidRefresh?(.ram(updateRAMMenu()))
         }
     }
 
@@ -504,7 +560,5 @@ final class MenuController: NSObject, NSMenuDelegate {
 
         thermalCollector.releaseResources()
         powerCollector.releaseResources()
-
-        onMenuClosed?()
     }
 }

@@ -33,14 +33,13 @@ final class ThermalCollector {
     }
 
     /// Stato termico di sistema pubblico Apple (M1–M5+ senza API private, zero costi a riposo).
+    /// Mappa la scala di sistema ad una nomenclatura coerente (Normal, Warning, Critical).
     func readThermalStateLabel() -> String {
         switch ProcessInfo.processInfo.thermalState {
         case .nominal:
-            return "Nominal"
-        case .fair:
-            return "Fair"
-        case .serious:
-            return "Serious"
+            return "Normal"
+        case .fair, .serious:
+            return "Warning"
         case .critical:
             return "Critical"
         @unknown default:

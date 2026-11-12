@@ -9,7 +9,7 @@
 [![Memory Footprint](https://img.shields.io/badge/RAM%20Footprint-~15%20MB-brightgreen)](docs/BENCHMARKS_AND_DESIGN.md)
 [![CPU Idle](https://img.shields.io/badge/CPU%20Idle-0.0%25-brightgreen)](docs/BENCHMARKS_AND_DESIGN.md)
 [![Battery Impact](https://img.shields.io/badge/Battery%20Impact-Zero%20Drain-brightgreen)](docs/BENCHMARKS_AND_DESIGN.md)
-[![Release](https://img.shields.io/badge/Release-v1.1.0-orange)](https://github.com/Ritolino/Pico/releases/tag/v1.1.0)
+[![Release](https://img.shields.io/badge/Release-v1.2.0-orange)](https://github.com/Ritolino/Pico/releases/tag/v1.2.0)
 [![License](https://img.shields.io/badge/License-MIT-brightgreen.svg)](LICENSE)
 
 An **ultra-lightweight, zero-overhead, privacy-first** system monitor for the macOS menu bar, purpose-built for **Apple Silicon** (M1 / M2 / M3 / M4 / M5). Designed from the ground up for **maximum battery efficiency and minimal RAM footprint** (~15 MB) via a `3.0 s` coalesced idle timer and `1.0 s` on-demand menu polling — a minimalist alternative to heavy monitoring suites like *Stats* and *iStat Menus*.
@@ -22,7 +22,7 @@ An **ultra-lightweight, zero-overhead, privacy-first** system monitor for the ma
 
 | Platform | Supported Hardware | Package Format | Download Link |
 | :--- | :--- | :--- | :--- |
-| **🍏 macOS** | Apple Silicon (M1 / M2 / M3 / M4 / M5) | Standalone Bundle (.zip) | [**Download Pico v1.1.0 (.zip)**](https://github.com/Ritolino/Pico/releases/download/v1.1.0/Pico-v1.1.0-macOS.zip) |
+| **🍏 macOS** | Apple Silicon (M1 / M2 / M3 / M4 / M5) | Standalone Bundle (.zip) | [**Download Pico v1.2.0 (.zip)**](https://github.com/Ritolino/Pico/releases/download/v1.2.0/Pico-v1.2.0-macOS.zip) |
 
 *Simply download the `.zip`, drag `Pico.app` into `/Applications`, and launch it. It automatically registers to launch at login with zero configuration.*
 
@@ -37,7 +37,7 @@ An **ultra-lightweight, zero-overhead, privacy-first** system monitor for the ma
 ## ✨ Features
 
 - **🔒 100% Private, Zero Telemetry & Zero Root**:
-  - Operates completely offline with zero network sockets, zero analytics, and zero tracking.
+  - Zero analytics, zero telemetry, and zero tracking. Runs strictly offline except for a lightweight check against GitHub Releases (`api.github.com`) at launch and once every 24 hours when updates are available (opt-out supported via `defaults write local.gabriele.pico PicoDisableAutoUpdate -bool true`).
   - Requires **no administrator privileges (`sudo`)**. Everything runs strictly in-process with standard user permissions.
 - **🔋 Battery-First Dual-Loop Efficiency, ~15 MB RAM & Zero CPU Idle (0.0%)**:
   - **Coalesced Rest Loop (`3.0 s` + `500 ms` Leeway)**: In the background, Pico wakes only once every `3.0 seconds` using macOS timer coalescing (`500 ms` leeway) to sample strictly 3 counters (`CPU %`, `GPU %`, `RAM %`). This lets Apple Silicon CPU cores remain in deep low-power sleep (`C-states`), consuming just **0.26 s** of CPU time over 60 seconds (**0.0% idle CPU**).
@@ -53,9 +53,9 @@ An **ultra-lightweight, zero-overhead, privacy-first** system monitor for the ma
 - **🔍 On-Demand Subsystem Menus (`1.0 s` Refresh Only When Clicked)**:
   - Attached directly flush against the menu bar (solving the macOS notch gap bug).
   - Zero background battery waste: expensive hardware queries activate at `1.0 s` **exclusively** while a menu stays open and deallocate immediately upon closing:
-    - **Total CPU Menu**: Total usage, dynamic per-cluster breakdown (**Performance** / **Super** & **Efficiency** cores across M1–M5), individual core loads, average temperature, true silicon **Hotspot**, system **Thermal State** (`Nominal`–`Critical`), and real-time **System Power in Watts (`W`)**.
-    - **GPU Menu**: Graphics engine utilization (`IOAccelerator` / `AGXAccelerator`, e.g. `G17G` on M5), average temperature, and GPU Hotspot.
-    - **RAM Menu**: Used Memory matching Activity Monitor's **Formula A** (`App + Wired + Compressed`), memory breakdown (`App`, `Wired`, `Compressed`, `Cached Files`, `Swap Used`), and **Top 5 processes** by real memory footprint in MB scanned in < 2ms via zero-allocation C buffer.
+    - **Total CPU Menu**: Hero load bar, thermal telemetry (**Temperature**, true silicon **Hotspot**, system **Thermal State** `Nominal`–`Critical`), real-time **System Power in Watts (`W`)**, and dedicated **Cluster Cards** (**Performance** / **Super** & **Efficiency** across M1–M5) separating cluster totals from per-core micro-bars.
+    - **GPU Menu**: Hero GPU engine utilization bar (`IOAccelerator` / `AGXAccelerator`, e.g. `G17G` on M5), average temperature, and GPU Hotspot.
+    - **RAM Menu**: Hero memory usage bar matching Activity Monitor's **Formula A** (`App + Wired + Compressed`), proportional breakdown micro-bars (`App`, `Wired`, `Compressed`, `Cached Files`, `Swap Used`), and **Top 5 processes** by real memory footprint in MB scanned in < 2ms via zero-allocation C buffer.
 - **🚀 Native macOS Launch-at-Login**:
   - Built-in integration with modern macOS Background Task Management (`SMAppService.mainApp`) on macOS 13+ (Ventura, Sonoma, Sequoia, Tahoe). No background daemons or helper plist clutter.
 - **🎯 Activity Monitor Quick Shortcuts**:
@@ -114,6 +114,9 @@ Yes. Clicking the CPU or GPU indicator queries hardware thermal diodes (includin
 
 ### Why does macOS show an "Apple could not verify…" warning on first launch?
 Pico is signed with a free local ad-hoc signature (`codesign -s -`) rather than a paid Apple Developer Program notarization certificate, so macOS Gatekeeper flags browser-downloaded `.zip` archives on first launch. The entire Swift + C source code is inspectable in this repository: you can either build locally in seconds (`./Scripts/install.sh`, no Gatekeeper prompt) or allow the downloaded bundle once in **System Settings → Privacy & Security → Open Anyway** (after dragging `Pico.app` into `/Applications`).
+
+### How do automatic updates work without increasing RAM usage?
+Pico checks GitHub Releases once 15 seconds after launch and at most once every 24 hours on wake using an isolated ephemeral worker that exits in under a second, keeping the menu bar process at **~15 MB** (`0` permanent networking overhead). If a newer release exists, an `Update Available (vX.Y.Z)…` item appears at the bottom of the CPU, GPU, and RAM menus with release notes, SHA-256 verification, and 1-click atomic replacement. To disable update checks completely for a 100% offline setup, run: `defaults write local.gabriele.pico PicoDisableAutoUpdate -bool true`.
 
 ---
 

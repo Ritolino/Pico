@@ -10,17 +10,21 @@ struct GPUDetailedMetrics {
 }
 
 final class GPUCollector {
+    init() {
+        pico_prime_gpu_baseline()
+    }
+
     deinit {
         pico_release_gpu_service()
     }
 
-    /// Lettura ultra-leggera per la barra dei menu (solo Device Utilization %).
+    /// Lettura ultra-leggera per la barra dei menu / hero GPU (GPUPH via IOReport con fallback AGX).
     func readTotalPercent() -> Int? {
-        var raw = pico_gpu_raw_t()
-        guard pico_read_gpu_raw(&raw) == 0, raw.available else {
+        var pct: Int32 = -1
+        guard pico_read_gpu_bar_percent(&pct) == 0, pct >= 0 else {
             return nil
         }
-        return Int(raw.device_utilization)
+        return Int(pct)
     }
 
     /// Lettura dettagliata per menu GPU / validazione CLI.

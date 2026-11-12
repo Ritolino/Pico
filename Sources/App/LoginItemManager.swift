@@ -67,4 +67,20 @@ enum LoginItemManager {
             }
         }
     }
+
+    static func markRestoreNeededAfterUpdateIfEnabled() {
+        if isEnabled {
+            UserDefaults.standard.set(true, forKey: "Pico_RestoreLoginItemAfterUpdate")
+        }
+    }
+
+    static func restoreAfterUpdateIfNeeded() {
+        let key = "Pico_RestoreLoginItemAfterUpdate"
+        guard UserDefaults.standard.bool(forKey: key) else { return }
+        UserDefaults.standard.removeObject(forKey: key)
+        guard Bundle.main.bundleURL.path.hasPrefix("/Applications/") else { return }
+        if status != .enabled {
+            try? SMAppService.mainApp.register()
+        }
+    }
 }

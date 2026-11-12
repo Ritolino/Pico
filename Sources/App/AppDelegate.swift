@@ -16,6 +16,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private var menuController: MenuController!
     private var barTimer: DispatchSourceTimer?
+    private let updateManager = UpdateManager()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         menuController = MenuController(
@@ -24,15 +25,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             ram: ramCollector
         )
 
+        updateManager.onUpdateStateChanged = { [weak self] release, isDownloading in
+            self?.menuController.setAvailableUpdate(release, isDownloading: isDownloading)
+        }
+        menuController.onUpdateItemClicked = { [weak self] in
+            self?.updateManager.presentUpdatePrompt()
+        }
+
         setupStatusItems()
         startBarTimer()
         setupSleepWakeObservers()
 
-        // Registrazione automatica login item solo al primo avvio in /Applications
+        // Registrazione automatica login item solo al primo avvio in /Applications (o ripristino post-update)
         LoginItemManager.registerIfFirstLaunchInApplications()
+        LoginItemManager.restoreAfterUpdateIfNeeded()
+
+        let args = CommandLine.arguments
+        if let idx = args.firstIndex(of: "--simulate-update"), idx + 1 < args.count {
+            updateManager.setSimulatedUpdate(version: args[idx + 1])
+        } else {
+            updateManager.scheduleInitialCheckIfAllowed()
+        }
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        updateManager.cancelPendingChecks()
         NSWorkspace.shared.notificationCenter.removeObserver(self)
         barTimer?.cancel()
         barTimer = nil
@@ -54,6 +71,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         autoreleasepool {
             updateBarItems()
         }
+        updateManager.scheduleWakeCheckIfDue()
     }
 
     private func setupStatusItems() {
@@ -76,9 +94,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         cpuItem.menu = menuController.cpuMenu
         cpuItem.button?.imagePosition = .imageOnly
 
-        // Alla chiusura di qualsiasi menu, aggiorna subito le icone della barra
-        menuController.onMenuClosed = { [weak self] in
-            self?.updateBarItems()
+        // Ad ogni apertura o refresh (1.0s) del menu aperto, aggiorna tutte le icone in barra
+        // mantenendo il tab aperto 100% coerente con il valore mostrato sotto.
+        menuController.onMenuDidRefresh = { [weak self] syncReading in
+            self?.updateBarItems(syncReading: syncReading)
         }
 
         // Assegna stato iniziale (pending "…" per CPU, lettura istantanea per GPU e RAM)
@@ -93,22 +112,44 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             leeway: .milliseconds(AppConfig.timerLeewayMilliseconds)
         )
         timer.setEventHandler { [weak self] in
+            guard let self, !self.menuController.isAnyMenuOpen else { return }
             autoreleasepool {
-                self?.updateBarItems()
+                self.updateBarItems()
             }
         }
         timer.resume()
         self.barTimer = timer
     }
 
-    private func updateBarItems() {
-        // Se un menu è aperto, non alterare l'immagine del pulsante attivo
-        // per azzerare qualsiasi sfarfallio o artefatto di disegno nella capsula di selezione.
-        guard !menuController.isAnyMenuOpen else { return }
+    private func updateBarItems(syncReading: MenuController.MenuBarSyncReading? = nil) {
+        let cpuPct: Int?
+        let gpuPct: Int?
+        let ramPct: Int?
 
-        let cpuPct = cpuCollector.readTotalPercent()
-        let gpuPct = gpuCollector.readTotalPercent()
-        let ramPct = ramCollector.readTotalPercent()
+        switch syncReading {
+        case .cpu(let activeCPU):
+            cpuPct = activeCPU
+            gpuPct = gpuCollector.readTotalPercent()
+            ramPct = ramCollector.readTotalPercent()
+        case .gpu(let activeGPU):
+            cpuPct = cpuCollector.readTotalPercent()
+            gpuPct = activeGPU
+            ramPct = ramCollector.readTotalPercent()
+        case .ram(let activeRAM):
+            cpuPct = cpuCollector.readTotalPercent()
+            gpuPct = gpuCollector.readTotalPercent()
+            ramPct = activeRAM
+        case .none:
+            // A menu aperto il refresh della barra è guidato esclusivamente dal timer a 1.0s di MenuController
+            guard !menuController.isAnyMenuOpen else { return }
+            cpuPct = cpuCollector.readTotalPercent()
+            gpuPct = gpuCollector.readTotalPercent()
+            ramPct = ramCollector.readTotalPercent()
+        }
+
+        NSAnimationContext.beginGrouping()
+        NSAnimationContext.current.allowsImplicitAnimation = false
+        defer { NSAnimationContext.endGrouping() }
 
         let newCpuImg = cpuFormatter.image(for: cpuPct)
         if cpuItem.button?.image !== newCpuImg {

@@ -11,6 +11,7 @@ struct RAMDetailedMetrics {
     let swapUsedBytes: UInt64
     let swapTotalBytes: UInt64
     let usedPercent: Int
+    let pressureLabel: String
 
     // Formule alternative per confronto e validazione empirica (Fase 2)
     let formulaBUsedBytes: UInt64
@@ -35,6 +36,26 @@ final class RAMCollector {
 
         let pct = (Double(usedBytes) / Double(raw.total_bytes)) * 100.0
         return min(100, max(0, Int(pct.rounded())))
+    }
+
+    /// Livello di pressione memoria di sistema (Activity Monitor / XNU Jetsam).
+    /// Mappa la sysctl kern.memorystatus_vm_pressure_level: 1 -> Normal, 2 -> Warning, 4 -> Critical.
+    func readPressureLabel() -> String {
+        var level: Int32 = 0
+        var size = MemoryLayout<Int32>.size
+        guard sysctlbyname("kern.memorystatus_vm_pressure_level", &level, &size, nil, 0) == 0 else {
+            return "N/A"
+        }
+        switch level {
+        case 1:
+            return "Normal"
+        case 2:
+            return "Warning"
+        case 4:
+            return "Critical"
+        default:
+            return "N/A"
+        }
     }
 
     /// Lettura completa con scomposizione App / Wired / Compressa e formule candidate.
@@ -82,10 +103,28 @@ final class RAMCollector {
             swapUsedBytes: raw.swap_used_bytes,
             swapTotalBytes: raw.swap_total_bytes,
             usedPercent: usedPct,
+            pressureLabel: readPressureLabel(),
             formulaBUsedBytes: formulaBBytes,
             formulaBPercent: formulaBPct,
             formulaCUsedBytes: formulaCBytes,
             formulaCPercent: formulaCPct
         )
+    }
+
+    static func formatGB(_ bytes: UInt64) -> String {
+        let gb = Double(bytes) / (1024.0 * 1024.0 * 1024.0)
+        return String(format: "%.2f GB", gb)
+    }
+
+    static func formatSwap(_ bytes: UInt64) -> String {
+        if bytes < 1024 * 1024 {
+            return "0.00 GB"
+        }
+        let mb = Double(bytes) / (1024.0 * 1024.0)
+        if mb < 1023.5 {
+            return String(format: "%.0f MB", mb)
+        }
+        let gb = Double(bytes) / (1024.0 * 1024.0 * 1024.0)
+        return String(format: "%.2f GB", gb)
     }
 }

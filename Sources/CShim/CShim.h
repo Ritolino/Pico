@@ -105,7 +105,15 @@ int pico_compute_cpu_delta(
     pico_cpu_usage_t *out
 );
 
-/// Legge le statistiche istantanee della GPU da IOKit (IOAccelerator / PerformanceStatistics).
+/// Inizializza in anticipo la baseline IOReport della GPU (se disponibile).
+void pico_prime_gpu_baseline(void);
+
+/// Lettura rapida per barra dei menu / menu GPU: usa il delta IOReport (GPUPH)
+/// evitando la serializzazione di PerformanceStatistics salvo fallback iniziale/errore.
+int pico_read_gpu_bar_percent(int32_t *out_pct);
+
+/// Legge le statistiche della GPU da IOKit (IOAccelerator / PerformanceStatistics)
+/// integrando l'utilizzo medio su delta hardware IOReport (GPUPH) quando disponibile.
 /// Mantiene in cache il servizio IOKit e rilascia il dizionario CF a ogni chiamata.
 int pico_read_gpu_raw(pico_gpu_raw_t *out);
 

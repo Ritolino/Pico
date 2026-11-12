@@ -1,11 +1,6 @@
 import AppKit
 import Foundation
 
-private func formatGB(_ bytes: UInt64) -> String {
-    let gb = Double(bytes) / (1024.0 * 1024.0 * 1024.0)
-    return String(format: "%.2f GB", gb)
-}
-
 private func printHardwareSummary() {
     var buffer = [CChar](repeating: 0, count: 256)
     let status = pico_cshim_hw_summary(&buffer, buffer.count)
@@ -80,16 +75,17 @@ private func runDumpMetrics() {
 
     print("\n--- [RAM Metrics & Top Processes] ---")
     if let r = ram.readDetailed() {
-        print("Total RAM: \(formatGB(r.totalBytes))")
-        print("Formula A (Activity Monitor: App + Wired + Compressed): \(formatGB(r.usedBytes)) (\(r.usedPercent)%)")
-        print("  - App (internal - purgeable): \(formatGB(r.appBytes))")
-        print("  - Wired:                      \(formatGB(r.wiredBytes))")
-        print("  - Compressed:                 \(formatGB(r.compressedBytes))")
-        print("  - Cached Files:               \(formatGB(r.cachedFilesBytes))")
-        print("  - Free:                       \(formatGB(r.freeBytes))")
-        print("  - Swap Used:                  \(formatGB(r.swapUsedBytes))")
-        print("Formula B (active - purgeable + wired + compr):         \(formatGB(r.formulaBUsedBytes)) (\(r.formulaBPercent)%)")
-        print("Formula C (total - free, top-style):                    \(formatGB(r.formulaCUsedBytes)) (\(r.formulaCPercent)%)")
+        print("Total RAM: \(RAMCollector.formatGB(r.totalBytes))")
+        print("Memory Pressure: \(r.pressureLabel)")
+        print("Formula A (Activity Monitor: App + Wired + Compressed): \(RAMCollector.formatGB(r.usedBytes)) (\(r.usedPercent)%)")
+        print("  - App (internal - purgeable): \(RAMCollector.formatGB(r.appBytes))")
+        print("  - Wired:                      \(RAMCollector.formatGB(r.wiredBytes))")
+        print("  - Compressed:                 \(RAMCollector.formatGB(r.compressedBytes))")
+        print("  - Cached Files:               \(RAMCollector.formatGB(r.cachedFilesBytes))")
+        print("  - Free:                       \(RAMCollector.formatGB(r.freeBytes))")
+        print("  - Swap Used:                  \(RAMCollector.formatSwap(r.swapUsedBytes))")
+        print("Formula B (active - purgeable + wired + compr):         \(RAMCollector.formatGB(r.formulaBUsedBytes)) (\(r.formulaBPercent)%)")
+        print("Formula C (total - free, top-style):                    \(RAMCollector.formatGB(r.formulaCUsedBytes)) (\(r.formulaCPercent)%)")
     } else {
         print("RAM: N/A")
     }
@@ -173,6 +169,7 @@ private func runDumpJSON() {
         "total_bytes": jsonVal(ramDetails?.totalBytes),
         "used_bytes": jsonVal(ramDetails?.usedBytes),
         "used_percent": jsonVal(ramDetails?.usedPercent),
+        "pressure_state": jsonVal(ramDetails?.pressureLabel.lowercased()),
         "app_bytes": jsonVal(ramDetails?.appBytes),
         "wired_bytes": jsonVal(ramDetails?.wiredBytes),
         "compressed_bytes": jsonVal(ramDetails?.compressedBytes),
@@ -265,6 +262,19 @@ autoreleasepool {
     if args.contains("--verify-build") {
         printHardwareSummary()
         exit(0)
+    }
+    if args.contains("--internal-update-check") {
+        exit(UpdateManager.runInternalUpdateCheckCLI())
+    }
+    if let idx = args.firstIndex(of: "--internal-update-download"), idx + 3 < args.count {
+        exit(UpdateManager.runInternalUpdateDownloadCLI(
+            downloadURLString: args[idx + 1],
+            expectedSha256: args[idx + 2],
+            stagingRoot: args[idx + 3]
+        ))
+    }
+    if args.contains("--test-update-logic") {
+        exit(UpdateManager.runSelfTestCLI())
     }
     if args.contains("--json") {
         runDumpJSON()

@@ -6,6 +6,7 @@
 #include <math.h>
 #include <dlfcn.h>
 #include <pthread.h>
+#include <time.h>
 #include <sys/sysctl.h>
 #include <libproc.h>
 #include <sys/proc_info.h>
@@ -267,26 +268,209 @@ static io_service_t pico_find_gpu_service(void) {
     return service;
 }
 
+typedef CFDictionaryRef (*PicoIRCopyChannelsFunc)(CFStringRef, CFStringRef, uint64_t, uint64_t, uint64_t);
+typedef void* (*PicoIRCreateSubFunc)(void*, CFMutableDictionaryRef, CFMutableDictionaryRef*, uint64_t, CFTypeRef);
+typedef CFDictionaryRef (*PicoIRCreateSamplesFunc)(void*, CFMutableDictionaryRef, CFTypeRef);
+typedef CFDictionaryRef (*PicoIRCreateDeltaFunc)(CFDictionaryRef, CFDictionaryRef, CFTypeRef);
+typedef void (*PicoIRIterateFunc)(CFDictionaryRef, int (^)(CFDictionaryRef));
+typedef CFStringRef (*PicoIRGetNameFunc)(CFDictionaryRef);
+typedef int32_t (*PicoIRStateCountFunc)(CFDictionaryRef);
+typedef CFStringRef (*PicoIRStateNameFunc)(CFDictionaryRef, int32_t);
+typedef int64_t (*PicoIRStateResFunc)(CFDictionaryRef, int32_t);
+
+static PicoIRCopyChannelsFunc g_ir_copy_channels = NULL;
+static PicoIRCreateSubFunc g_ir_create_sub = NULL;
+static PicoIRCreateSamplesFunc g_ir_create_samples = NULL;
+static PicoIRCreateDeltaFunc g_ir_create_delta = NULL;
+static PicoIRIterateFunc g_ir_iterate = NULL;
+static PicoIRGetNameFunc g_ir_get_chan_name = NULL;
+static PicoIRStateCountFunc g_ir_state_count = NULL;
+static PicoIRStateNameFunc g_ir_state_name = NULL;
+static PicoIRStateResFunc g_ir_state_res = NULL;
+static pthread_once_t g_ir_gpu_once = PTHREAD_ONCE_INIT;
+
+static void *g_gpu_ir_sub = NULL;
+static CFMutableDictionaryRef g_gpu_ir_sub_dict = NULL;
+static CFDictionaryRef g_gpu_prev_sample = NULL;
+static uint64_t g_gpu_prev_ns = 0;
+static int32_t g_gpu_last_pct = 0;
+static bool g_gpu_has_last_pct = false;
+
+static void pico_init_ioreport_gpu_symbols(void) {
+    void *h = dlopen("/usr/lib/libIOReport.dylib", RTLD_LAZY);
+    if (!h) return;
+    g_ir_copy_channels = (PicoIRCopyChannelsFunc)dlsym(h, "IOReportCopyChannelsInGroup");
+    g_ir_create_sub = (PicoIRCreateSubFunc)dlsym(h, "IOReportCreateSubscription");
+    g_ir_create_samples = (PicoIRCreateSamplesFunc)dlsym(h, "IOReportCreateSamples");
+    g_ir_create_delta = (PicoIRCreateDeltaFunc)dlsym(h, "IOReportCreateSamplesDelta");
+    g_ir_iterate = (PicoIRIterateFunc)dlsym(h, "IOReportIterate");
+    g_ir_get_chan_name = (PicoIRGetNameFunc)dlsym(h, "IOReportChannelGetChannelName");
+    g_ir_state_count = (PicoIRStateCountFunc)dlsym(h, "IOReportStateGetCount");
+    g_ir_state_name = (PicoIRStateNameFunc)dlsym(h, "IOReportStateGetNameForIndex");
+    g_ir_state_res = (PicoIRStateResFunc)dlsym(h, "IOReportStateGetResidency");
+}
+
+static bool pico_ensure_gpu_ioreport(void) {
+    if (g_gpu_ir_sub && g_gpu_ir_sub_dict) {
+        return true;
+    }
+    pthread_once(&g_ir_gpu_once, pico_init_ioreport_gpu_symbols);
+    if (!g_ir_copy_channels || !g_ir_create_sub || !g_ir_create_samples ||
+        !g_ir_create_delta || !g_ir_iterate || !g_ir_get_chan_name ||
+        !g_ir_state_count || !g_ir_state_name || !g_ir_state_res) {
+        return false;
+    }
+
+    CFDictionaryRef channels = g_ir_copy_channels(CFSTR("GPU Stats"), CFSTR("GPU Performance States"), 0, 0, 0);
+    if (!channels) {
+        return false;
+    }
+    CFMutableDictionaryRef mut = CFDictionaryCreateMutableCopy(kCFAllocatorDefault, 0, channels);
+    CFRelease(channels);
+    if (!mut) {
+        return false;
+    }
+
+    CFMutableDictionaryRef sub_dict = NULL;
+    void *sub = g_ir_create_sub(NULL, mut, &sub_dict, 0, NULL);
+    CFRelease(mut);
+    if (!sub || !sub_dict) {
+        if (sub_dict) CFRelease(sub_dict);
+        if (sub) CFRelease(sub);
+        return false;
+    }
+
+    g_gpu_ir_sub = sub;
+    g_gpu_ir_sub_dict = sub_dict;
+    return true;
+}
+
+static void pico_release_gpu_ioreport(void) {
+    if (g_gpu_prev_sample) {
+        CFRelease(g_gpu_prev_sample);
+        g_gpu_prev_sample = NULL;
+    }
+    if (g_gpu_ir_sub_dict) {
+        CFRelease(g_gpu_ir_sub_dict);
+        g_gpu_ir_sub_dict = NULL;
+    }
+    if (g_gpu_ir_sub) {
+        CFRelease(g_gpu_ir_sub);
+        g_gpu_ir_sub = NULL;
+    }
+    g_gpu_prev_ns = 0;
+    g_gpu_last_pct = 0;
+    g_gpu_has_last_pct = false;
+}
+
+void pico_prime_gpu_baseline(void) {
+    if (!pico_ensure_gpu_ioreport() || g_gpu_prev_sample) {
+        return;
+    }
+    g_gpu_prev_sample = g_ir_create_samples(g_gpu_ir_sub, g_gpu_ir_sub_dict, NULL);
+    if (g_gpu_prev_sample) {
+        g_gpu_prev_ns = clock_gettime_nsec_np(CLOCK_UPTIME_RAW);
+    }
+}
+
+static bool pico_read_gpu_ioreport_pct(int32_t *out_pct) {
+    if (!pico_ensure_gpu_ioreport()) {
+        return false;
+    }
+
+    uint64_t now_ns = clock_gettime_nsec_np(CLOCK_UPTIME_RAW);
+    if (!g_gpu_prev_sample) {
+        g_gpu_prev_sample = g_ir_create_samples(g_gpu_ir_sub, g_gpu_ir_sub_dict, NULL);
+        if (g_gpu_prev_sample) {
+            g_gpu_prev_ns = now_ns;
+        }
+        return false;
+    }
+
+    // Finestra minima 150ms per preservare il delta medio su letture ravvicinate (es. click dopo tick barra)
+    if (now_ns >= g_gpu_prev_ns && (now_ns - g_gpu_prev_ns) < 150000000ULL) {
+        if (g_gpu_has_last_pct) {
+            *out_pct = g_gpu_last_pct;
+            return true;
+        }
+        return false;
+    }
+
+    CFDictionaryRef curr = g_ir_create_samples(g_gpu_ir_sub, g_gpu_ir_sub_dict, NULL);
+    if (!curr) {
+        pico_release_gpu_ioreport();
+        return false;
+    }
+
+    CFDictionaryRef delta = g_ir_create_delta(g_gpu_prev_sample, curr, NULL);
+    if (!delta) {
+        CFRelease(curr);
+        pico_release_gpu_ioreport();
+        return false;
+    }
+
+    __block int32_t computed_pct = -1;
+    g_ir_iterate(delta, ^int(CFDictionaryRef sample) {
+        CFStringRef cn = g_ir_get_chan_name(sample);
+        if (!cn || CFStringCompare(cn, CFSTR("GPUPH"), 0) != kCFCompareEqualTo) {
+            return 0;
+        }
+        int32_t sc = g_ir_state_count(sample);
+        int64_t off_ticks = 0;
+        int64_t total_ticks = 0;
+        bool has_off_state = false;
+        for (int32_t i = 0; i < sc; i++) {
+            int64_t res = g_ir_state_res(sample, i);
+            if (res < 0) continue;
+            total_ticks += res;
+            CFStringRef sn = g_ir_state_name(sample, i);
+            if (sn && (CFStringCompare(sn, CFSTR("OFF"), kCFCompareCaseInsensitive) == kCFCompareEqualTo ||
+                       CFStringCompare(sn, CFSTR("IDLE"), kCFCompareCaseInsensitive) == kCFCompareEqualTo ||
+                       CFStringCompare(sn, CFSTR("DOWN"), kCFCompareCaseInsensitive) == kCFCompareEqualTo)) {
+                off_ticks += res;
+                has_off_state = true;
+            }
+        }
+        if (has_off_state && total_ticks > 0) {
+            double active_pct = ((double)(total_ticks - off_ticks) / (double)total_ticks) * 100.0;
+            computed_pct = clamp_percent(active_pct);
+        }
+        return 1;
+    });
+
+    CFRelease(delta);
+
+    if (computed_pct >= 0) {
+        CFRelease(g_gpu_prev_sample);
+        g_gpu_prev_sample = curr;
+        g_gpu_prev_ns = now_ns;
+        g_gpu_last_pct = computed_pct;
+        g_gpu_has_last_pct = true;
+        *out_pct = computed_pct;
+        return true;
+    }
+
+    CFRelease(curr);
+    return false;
+}
+
 void pico_release_gpu_service(void) {
     if (g_gpu_service != IO_OBJECT_NULL) {
         IOObjectRelease(g_gpu_service);
         g_gpu_service = IO_OBJECT_NULL;
     }
+    pico_release_gpu_ioreport();
 }
 
-int pico_read_gpu_raw(pico_gpu_raw_t *out) {
+static bool pico_read_gpu_perfstats(pico_gpu_raw_t *out, bool include_details) {
     if (!out) {
-        return -1;
+        return false;
     }
-    memset(out, 0, sizeof(*out));
-    out->device_utilization = -1;
-    out->renderer_utilization = -1;
-    out->tiler_utilization = -1;
 
     if (g_gpu_service == IO_OBJECT_NULL) {
         g_gpu_service = pico_find_gpu_service();
         if (g_gpu_service == IO_OBJECT_NULL) {
-            return -1;
+            return false;
         }
     }
 
@@ -298,7 +482,8 @@ int pico_read_gpu_raw(pico_gpu_raw_t *out) {
     );
 
     if (!prop) {
-        pico_release_gpu_service();
+        // Rilascia solo l'handle IOKit scaduto; preserva l'eventuale baseline IOReport
+        IOObjectRelease(g_gpu_service);
         g_gpu_service = pico_find_gpu_service();
         if (g_gpu_service != IO_OBJECT_NULL) {
             prop = IORegistryEntryCreateCFProperty(
@@ -311,12 +496,12 @@ int pico_read_gpu_raw(pico_gpu_raw_t *out) {
     }
 
     if (!prop) {
-        return -1;
+        return false;
     }
 
     if (CFGetTypeID(prop) != CFDictionaryGetTypeID()) {
         CFRelease(prop);
-        return -1;
+        return false;
     }
 
     CFDictionaryRef stats = (CFDictionaryRef)prop;
@@ -330,20 +515,63 @@ int pico_read_gpu_raw(pico_gpu_raw_t *out) {
         out->available = true;
     }
 
-    int32_t rend_util = -1;
-    if (pico_extract_cfnumber_int32(stats, CFSTR("Renderer Utilization %"), &rend_util)) {
-        out->renderer_utilization = rend_util;
-    }
+    if (include_details) {
+        int32_t rend_util = -1;
+        if (pico_extract_cfnumber_int32(stats, CFSTR("Renderer Utilization %"), &rend_util)) {
+            out->renderer_utilization = rend_util;
+        }
 
-    int32_t tiler_util = -1;
-    if (pico_extract_cfnumber_int32(stats, CFSTR("Tiler Utilization %"), &tiler_util)) {
-        out->tiler_utilization = tiler_util;
-    }
+        int32_t tiler_util = -1;
+        if (pico_extract_cfnumber_int32(stats, CFSTR("Tiler Utilization %"), &tiler_util)) {
+            out->tiler_utilization = tiler_util;
+        }
 
-    pico_extract_cfnumber_int64(stats, CFSTR("In use system memory"), &out->in_use_system_memory);
-    pico_extract_cfnumber_int64(stats, CFSTR("Alloc system memory"), &out->alloc_system_memory);
+        pico_extract_cfnumber_int64(stats, CFSTR("In use system memory"), &out->in_use_system_memory);
+        pico_extract_cfnumber_int64(stats, CFSTR("Alloc system memory"), &out->alloc_system_memory);
+    }
 
     CFRelease(prop);
+    return out->available;
+}
+
+int pico_read_gpu_bar_percent(int32_t *out_pct) {
+    if (!out_pct) {
+        return -1;
+    }
+    int32_t ir_util = -1;
+    if (pico_read_gpu_ioreport_pct(&ir_util)) {
+        *out_pct = ir_util;
+        return 0;
+    }
+    pico_gpu_raw_t fallback;
+    memset(&fallback, 0, sizeof(fallback));
+    fallback.device_utilization = -1;
+    fallback.renderer_utilization = -1;
+    fallback.tiler_utilization = -1;
+    if (pico_read_gpu_perfstats(&fallback, false) && fallback.available) {
+        *out_pct = fallback.device_utilization;
+        return 0;
+    }
+    return -1;
+}
+
+int pico_read_gpu_raw(pico_gpu_raw_t *out) {
+    if (!out) {
+        return -1;
+    }
+    memset(out, 0, sizeof(*out));
+    out->device_utilization = -1;
+    out->renderer_utilization = -1;
+    out->tiler_utilization = -1;
+
+    (void)pico_read_gpu_perfstats(out, true);
+
+    int32_t ir_util = -1;
+    if (pico_read_gpu_ioreport_pct(&ir_util)) {
+        out->device_utilization = ir_util;
+        out->available = true;
+    }
+
     return out->available ? 0 : -1;
 }
 
