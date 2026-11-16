@@ -1,9 +1,22 @@
-# Build artifacts
-build/
+# Compiled binaries, packages and build artifacts
+*.app/
 *.app
+*.dmg
+*.exe
+*.msi
+_internal/
+build/
+dist/
+*.zip
 *.o
 *.dSYM
+__pycache__/
+.swiftpm/
 
 # macOS metadata
 .DS_Store
-.swiftpm/
+
+# Local AI coordination & internal engineering workspace
+AGENTS.md
+IMPLEMENTAZIONI.md
+Progetto/

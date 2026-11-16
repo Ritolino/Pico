@@ -42,7 +42,7 @@ final class MenuController: NSObject, NSMenuDelegate {
     // CPU Graphic Views
     private let cpuTotalView = MenuHeroView(title: "Total CPU", width: menuRowWidth)
     private let cpuTempView = MenuRowView(label: "Temperature", value: "…", width: menuRowWidth, height: 22.0)
-    private let cpuHotspotView = MenuRowView(label: "CPU Hotspot", value: "…", width: menuRowWidth, height: 22.0)
+    private let cpuFanView = MenuRowView(label: "Fan Speed", value: "…", width: menuRowWidth, height: 22.0)
     private let cpuThermalStateView = MenuRowView(label: "Thermal State", value: "…", width: menuRowWidth, height: 22.0)
     private let cpuPowerView = MenuRowView(label: "System Power", value: "…", width: menuRowWidth, height: 22.0)
     private let superClusterCard: MenuClusterView?
@@ -202,7 +202,7 @@ final class MenuController: NSObject, NSMenuDelegate {
             NSMenuItem.separator(),
             makeItem(with: cpuThermalStateView),
             makeItem(with: cpuTempView),
-            makeItem(with: cpuHotspotView),
+            makeItem(with: cpuFanView),
             makeItem(with: cpuPowerView),
             NSMenuItem.separator()
         ]
@@ -408,10 +408,14 @@ final class MenuController: NSObject, NSMenuDelegate {
 
         if let t = thermalCollector.readCPUThermal() {
             cpuTempView.value = String(format: "%.0f °C", t.averageCelsius)
-            cpuHotspotView.value = String(format: "%.0f °C", t.hotspotCelsius)
         } else {
             cpuTempView.value = "N/A"
-            cpuHotspotView.value = "N/A"
+        }
+
+        if let fan = thermalCollector.readFanSpeed() {
+            cpuFanView.value = fan.formattedLabel
+        } else {
+            cpuFanView.value = "N/A"
         }
 
         let thermalState = thermalCollector.readThermalStateLabel()

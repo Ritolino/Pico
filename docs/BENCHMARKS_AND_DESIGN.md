@@ -127,8 +127,8 @@ Anyone can reproduce and verify Pico's resource consumption on their own Mac usi
 
 ```bash
 # 1. Verify compilation and hardware summary
-./GitHub/Scripts/build.sh
-./GitHub/build/Pico.app/Contents/MacOS/Pico --verify-build
+./Scripts/build.sh
+./build/Pico.app/Contents/MacOS/Pico --verify-build
 
 # 2. Check physical footprint (phys_footprint)
 footprint Pico | grep "Pico"

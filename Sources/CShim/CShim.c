@@ -1019,6 +1019,69 @@ int pico_read_system_power(pico_power_t *out) {
     return -1;
 }
 
+static int pico_smc_read_uint8(io_connect_t conn, const char *key_str) {
+    if (!conn || !key_str || strlen(key_str) != 4) return -1;
+    uint32_t key = ((uint32_t)(uint8_t)key_str[0] << 24) |
+                   ((uint32_t)(uint8_t)key_str[1] << 16) |
+                   ((uint32_t)(uint8_t)key_str[2] << 8)  |
+                   ((uint32_t)(uint8_t)key_str[3]);
+
+    SMCParamStruct in, out;
+    memset(&in, 0, sizeof(in));
+    in.key = key;
+    in.data8 = SMC_CMD_READ_KEYINFO;
+    size_t sz = sizeof(SMCParamStruct);
+    if (IOConnectCallStructMethod(conn, KERNEL_INDEX_SMC, &in, sz, &out, &sz) != KERN_SUCCESS || out.result != 0) {
+        return -1;
+    }
+    if (out.keyInfo.dataSize < 1) {
+        return -1;
+    }
+
+    in.data8 = SMC_CMD_READ_BYTES;
+    in.keyInfo = out.keyInfo;
+    sz = sizeof(SMCParamStruct);
+    if (IOConnectCallStructMethod(conn, KERNEL_INDEX_SMC, &in, sz, &out, &sz) != KERN_SUCCESS || out.result != 0) {
+        return -1;
+    }
+    return (int)out.bytes[0];
+}
+
+int pico_read_fan_speed(pico_fan_t *out) {
+    if (!out) return -1;
+    memset(out, 0, sizeof(*out));
+
+    io_connect_t conn = pico_get_smc_conn();
+    if (conn == IO_OBJECT_NULL) return -1;
+
+    int count = pico_smc_read_uint8(conn, "FNum");
+    if (count <= 0) {
+        return -1;
+    }
+    if (count > 4) {
+        count = 4;
+    }
+
+    static const char *k_fan_keys[4] = { "F0Ac", "F1Ac", "F2Ac", "F3Ac" };
+    int valid = 0;
+    for (int i = 0; i < count; i++) {
+        float rpm = pico_smc_read_float(conn, k_fan_keys[i]);
+        if (rpm >= 0.0f && rpm < 20000.0f) {
+            out->rpm[i] = rpm;
+            valid++;
+        } else {
+            out->rpm[i] = -1.0f;
+        }
+    }
+
+    if (valid > 0) {
+        out->fan_count = count;
+        out->available = true;
+        return 0;
+    }
+    return -1;
+}
+
 /* ========================================================================= */
 /* Top 5 Processi per Physical Footprint via libproc                         */
 /* ========================================================================= */

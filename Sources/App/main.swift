@@ -48,6 +48,11 @@ private func runDumpMetrics() {
     } else {
         print("CPU Temperature: N/A")
     }
+    if let fan = thermal.readFanSpeed() {
+        print("Fan Speed: \(fan.formattedLabel)")
+    } else {
+        print("Fan Speed: N/A")
+    }
     print("Thermal State: \(thermal.readThermalStateLabel())")
 
     if let w = power.readSystemWatts() {
@@ -126,6 +131,7 @@ private func runDumpJSON() {
 
     let cpuDetails = cpu.readDetailed()
     let cpuTherm = thermal.readCPUThermal()
+    let fanSpeed = thermal.readFanSpeed()
     let sysWatts = power.readSystemWatts()
     let gpuDetails = gpu.readDetailed()
     let gpuTherm = thermal.readGPUThermal()
@@ -150,6 +156,7 @@ private func runDumpJSON() {
         "cores_percent": cpuDetails?.corePercents ?? [],
         "temp_avg_c": jsonDouble(cpuTherm?.averageCelsius, decimals: 1),
         "temp_hotspot_c": jsonDouble(cpuTherm?.hotspotCelsius, decimals: 1),
+        "fan_rpm": fanSpeed?.rpm ?? [],
         "thermal_state": thermal.readThermalStateLabel().lowercased(),
         "system_power_watts": jsonDouble(sysWatts, decimals: 2)
     ]

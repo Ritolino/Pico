@@ -1,5 +1,16 @@
 # CHANGELOG.md — Registro delle Modifiche
 
+## [1.2.5] — 2026-11-14 (Velocità Ventole RPM On-Demand, Struttura Single-Repo & Allineamento Versione)
+
+### Aggiunto & Migliorato
+- **Lettura Velocità Ventole (`Fan Speed` in RPM) nel Menu CPU e CLI (`CShim.c`, `ThermalCollector.swift`, `MenuController.swift`, `main.swift`)**:
+  - Sostituita la riga `CPU Hotspot` nel menu a discesa CPU con **`Fan Speed`**, letta on-demand solo a menu aperto tramite le chiavi `AppleSMC` (`FNum`, `F0Ac..F3Ac`, costo zero a riposo; mostra `N/A` su modelli privi di ventole).
+  - Esposta la velocità delle ventole anche nei flag diagnostici `--dump-metrics` (`Fan Speed:`) e `--json` (`"fan_rpm"`).
+- **Riorganizzazione Repository Singolo in Root (`.gitignore`, `docs/BENCHMARKS_AND_DESIGN.md`)**:
+  - Unificato il pacchetto pubblico direttamente nella root del repository, mantenendo `Progetto/`, `AGENTS.md` e `build/` esclusi dal tracciamento pubblico tramite `.gitignore`.
+- **Allineamento Versione Bundle (`Info.plist`)**:
+  - Aggiornato `CFBundleShortVersionString` a **`1.2.5`** (`CFBundleVersion = 4`) insieme a `README.md`, `README.it.md`, `CHANGELOG.md` e `Progetto/STATUS.md`.
+
 ## [1.2.0] — 2026-11-12 (Redesign UX/UI Menu a Discesa, Continuità GPU IOReport, Sincronia Barra 1s & Aggiornamento Automatico)
 
 ### Aggiunto (`UpdateManager.swift`, `DEC-029`)

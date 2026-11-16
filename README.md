@@ -9,7 +9,7 @@
 [![Memory Footprint](https://img.shields.io/badge/RAM%20Footprint-~15%20MB-brightgreen)](docs/BENCHMARKS_AND_DESIGN.md)
 [![CPU Idle](https://img.shields.io/badge/CPU%20Idle-0.0%25-brightgreen)](docs/BENCHMARKS_AND_DESIGN.md)
 [![Battery Impact](https://img.shields.io/badge/Battery%20Impact-Zero%20Drain-brightgreen)](docs/BENCHMARKS_AND_DESIGN.md)
-[![Release](https://img.shields.io/badge/Release-v1.2.0-orange)](https://github.com/Ritolino/Pico/releases/tag/v1.2.0)
+[![Release](https://img.shields.io/badge/Release-v1.2.5-orange)](https://github.com/Ritolino/Pico/releases/tag/v1.2.5)
 [![License](https://img.shields.io/badge/License-MIT-brightgreen.svg)](LICENSE)
 
 An **ultra-lightweight, zero-overhead, privacy-first** system monitor for the macOS menu bar, purpose-built for **Apple Silicon** (M1 / M2 / M3 / M4 / M5). Designed from the ground up for **maximum battery efficiency and minimal RAM footprint** (~15 MB) via a `3.0 s` coalesced idle timer and `1.0 s` on-demand menu polling — a minimalist alternative to heavy monitoring suites like *Stats* and *iStat Menus*.
@@ -22,7 +22,7 @@ An **ultra-lightweight, zero-overhead, privacy-first** system monitor for the ma
 
 | Platform | Supported Hardware | Package Format | Download Link |
 | :--- | :--- | :--- | :--- |
-| **🍏 macOS** | Apple Silicon (M1 / M2 / M3 / M4 / M5) | Standalone Bundle (.zip) | [**Download Pico v1.2.0 (.zip)**](https://github.com/Ritolino/Pico/releases/download/v1.2.0/Pico-v1.2.0-macOS.zip) |
+| **🍏 macOS** | Apple Silicon (M1 / M2 / M3 / M4 / M5) | Standalone Bundle (.zip) | [**Download Pico v1.2.5 (.zip)**](https://github.com/Ritolino/Pico/releases/download/v1.2.5/Pico-v1.2.5-macOS.zip) |
 
 *Simply download the `.zip`, drag `Pico.app` into `/Applications`, and launch it. It automatically registers to launch at login with zero configuration.*
 
@@ -53,7 +53,7 @@ An **ultra-lightweight, zero-overhead, privacy-first** system monitor for the ma
 - **🔍 On-Demand Subsystem Menus (`1.0 s` Refresh Only When Clicked)**:
   - Attached directly flush against the menu bar (solving the macOS notch gap bug).
   - Zero background battery waste: expensive hardware queries activate at `1.0 s` **exclusively** while a menu stays open and deallocate immediately upon closing:
-    - **Total CPU Menu**: Hero load bar, thermal telemetry (**Temperature**, true silicon **Hotspot**, system **Thermal State** `Nominal`–`Critical`), real-time **System Power in Watts (`W`)**, and dedicated **Cluster Cards** (**Performance** / **Super** & **Efficiency** across M1–M5) separating cluster totals from per-core micro-bars.
+    - **Total CPU Menu**: Hero load bar, thermal telemetry (**Temperature**, **Fan Speed** (`RPM`), system **Thermal State** `Nominal`–`Critical`), real-time **System Power in Watts (`W`)**, and dedicated **Cluster Cards** (**Performance** / **Super** & **Efficiency** across M1–M5) separating cluster totals from per-core micro-bars.
     - **GPU Menu**: Hero GPU engine utilization bar (`IOAccelerator` / `AGXAccelerator`, e.g. `G17G` on M5), average temperature, and GPU Hotspot.
     - **RAM Menu**: Hero memory usage bar matching Activity Monitor's **Formula A** (`App + Wired + Compressed`), proportional breakdown micro-bars (`App`, `Wired`, `Compressed`, `Cached Files`, `Swap Used`), and **Top 5 processes** by real memory footprint in MB scanned in < 2ms via zero-allocation C buffer.
 - **🚀 Native macOS Launch-at-Login**:

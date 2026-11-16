@@ -9,7 +9,7 @@
 [![Impronta RAM](https://img.shields.io/badge/Impronta%20RAM-~15%20MB-brightgreen)](docs/BENCHMARKS_AND_DESIGN.md)
 [![CPU a Riposo](https://img.shields.io/badge/CPU%20a%20Riposo-0.0%25-brightgreen)](docs/BENCHMARKS_AND_DESIGN.md)
 [![Impatto Batteria](https://img.shields.io/badge/Impatto%20Batteria-Zero%20Consumo-brightgreen)](docs/BENCHMARKS_AND_DESIGN.md)
-[![Release](https://img.shields.io/badge/Release-v1.2.0-orange)](https://github.com/Ritolino/Pico/releases/tag/v1.2.0)
+[![Release](https://img.shields.io/badge/Release-v1.2.5-orange)](https://github.com/Ritolino/Pico/releases/tag/v1.2.5)
 [![Licenza](https://img.shields.io/badge/Licenza-MIT-brightgreen.svg)](LICENSE)
 
 Un monitor di sistema **ultraleggero, a zero overhead e privacy-first** per la barra dei menu di macOS, sviluppato su misura per i processori **Apple Silicon** (M1 / M2 / M3 / M4 / M5). Progettato per essere efficiente al **100% su batteria e RAM (~15 MB)** grazie al polling *coalesced* ogni `3.0 s` a riposo e `1.0 s` solo a menu aperto — un'alternativa minimalista alle pesanti suite come *Stats* e *iStat Menus*.
@@ -22,7 +22,7 @@ Un monitor di sistema **ultraleggero, a zero overhead e privacy-first** per la b
 
 | Piattaforma | Hardware Supportato | Formato Pacchetto | Link per il Download |
 | :--- | :--- | :--- | :--- |
-| **🍏 macOS** | Apple Silicon (M1 / M2 / M3 / M4 / M5) | Bundle Standalone (.zip) | [**Scarica Pico v1.2.0 (.zip)**](https://github.com/Ritolino/Pico/releases/download/v1.2.0/Pico-v1.2.0-macOS.zip) |
+| **🍏 macOS** | Apple Silicon (M1 / M2 / M3 / M4 / M5) | Bundle Standalone (.zip) | [**Scarica Pico v1.2.5 (.zip)**](https://github.com/Ritolino/Pico/releases/download/v1.2.5/Pico-v1.2.5-macOS.zip) |
 
 *Scarica il file `.zip`, trascina `Pico.app` nella cartella `/Applications` e avvialo. Si configura automaticamente per l'avvio al login senza alcuna procedura manuale.*
 
@@ -53,7 +53,7 @@ Un monitor di sistema **ultraleggero, a zero overhead e privacy-first** per la b
 - **🔍 Menu Nativi On-Demand di Dettaglio (`1.0 s` Solo al Click)**:
   - Ancorati direttamente a filo contro il bordo inferiore della barra (risolto il bug dello spazio vuoto sui Mac con notch).
   - Zero spreco energetico in background: le letture hardware costose si attivano a `1.0 s` **esclusivamente** finché il menu resta aperto e vengono rilasciate all'istante alla chiusura:
-    - **Menu CPU**: Barra Hero di carico totale, telemetria termica (**Temperatura**, vero **Hotspot** del silicio, **Stato Termico** `Nominal`–`Critical`), **Potenza Istantanea in Watt (`W`)** e **Cluster Card** dedicate (**Performance** / **Super** ed **Efficiency** su M1–M5) che separano i totali cluster dalle micro-barre per singolo core.
+    - **Menu CPU**: Barra Hero di carico totale, telemetria termica (**Temperatura**, **Fan Speed** (`RPM`), **Stato Termico** `Nominal`–`Critical`), **Potenza Istantanea in Watt (`W`)** e **Cluster Card** dedicate (**Performance** / **Super** ed **Efficiency** su M1–M5) che separano i totali cluster dalle micro-barre per singolo core.
     - **Menu GPU**: Barra Hero di utilizzo motore grafico (`IOAccelerator` / `AGXAccelerator`, es. `G17G` su M5), temperatura media GPU e Hotspot GPU.
     - **Menu RAM**: Barra Hero della memoria usata calcolata con **Formula A** (`App + Wired + Compressed`), scomposizione grafica con micro-barre (`App`, `Wired`, `Compressed`, `Cached Files`, `Swap Usato`) e **Top 5 processi** per reale consumo di memoria in MB scansionati in < 2ms tramite buffer C a zero allocazioni.
 - **🚀 Avvio Automatico al Login Nativo**:

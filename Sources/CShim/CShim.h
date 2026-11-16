@@ -132,6 +132,16 @@ int pico_read_gpu_thermal(pico_thermal_t *out);
 /// Legge la potenza totale del sistema in Watt (chiave PSTR di AppleSMC).
 int pico_read_system_power(pico_power_t *out);
 
+/// Dati velocità ventole via AppleSMC (FNum, F0Ac..F3Ac).
+typedef struct {
+    int fan_count;
+    float rpm[4];
+    bool available;
+} pico_fan_t;
+
+/// Legge la velocità attuale delle ventole (RPM) via AppleSMC (solo a menu aperto).
+int pico_read_fan_speed(pico_fan_t *out);
+
 /// Rilascia la connessione AppleSMC se aperta.
 void pico_release_smc(void);
 
